@@ -1,0 +1,1745 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BSFAS — Brain Structure–Function Analytics System</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        bg: { DEFAULT: '#060a13', card: '#0c1220', elevated: '#111827' },
+        accent: { DEFAULT: '#06b6d4', dim: '#0e7490', glow: '#22d3ee' },
+        neural: { te: '#06b6d4', granger: '#8b5cf6', dbn: '#10b981' }
+      },
+      fontFamily: {
+        sans: ['Inter', 'system-ui', 'sans-serif'],
+        mono: ['JetBrains Mono', 'monospace']
+      }
+    }
+  }
+}
+</script>
+<style>
+* { scrollbar-width: thin; scrollbar-color: #1e293b #060a13; }
+body { overflow-x: hidden; }
+.glow-border { box-shadow: 0 0 24px -6px rgba(34,211,238,0.22), inset 0 1px 0 rgba(255,255,255,0.06); }
+.glow-text { text-shadow: 0 0 20px rgba(6,182,212,0.4); }
+.method-card { transition: all 0.3s cubic-bezier(0.4,0,0.2,1); }
+.method-card:hover { transform: translateY(-2px); }
+.method-card.selected { border-color: var(--sel-color, #06b6d4); box-shadow: 0 0 20px -5px var(--sel-color, rgba(6,182,212,0.4)); }
+.upload-zone { border: 2px dashed #1e293b; transition: all 0.3s; }
+.upload-zone.uploaded { border-color: #10b981; background: rgba(16,185,129,0.05); }
+.upload-zone.uploading { border-color: #22d3ee; background: rgba(34,211,238,0.06); }
+.upload-zone.invalid { border-color: rgba(248,113,113,0.7); background: rgba(127,29,29,0.16); }
+.upload-zone.dragover { border-color: #67e8f9; background: rgba(103,232,249,0.08); }
+#canvas3d {
+  width: 100%;
+  height: 560px;
+  border-radius: 12px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 45%, rgba(34,211,238,0.12), transparent 38%),
+    radial-gradient(circle at 15% 20%, rgba(99,102,241,0.12), transparent 24%),
+    linear-gradient(180deg, #0d1726 0%, #08101a 55%, #04070d 100%);
+}
+.canvas-shell {
+  position: relative;
+}
+.axis-overlay {
+  position: absolute;
+  left: 18px;
+  bottom: 18px;
+  width: 128px;
+  height: 128px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: linear-gradient(135deg, rgba(15,23,42,0.78), rgba(8,15,30,0.52));
+  backdrop-filter: blur(8px);
+  pointer-events: none;
+}
+.axis-overlay-label {
+  position: absolute;
+  top: 8px;
+  left: 10px;
+  font-size: 10px;
+  line-height: 1;
+  color: #cbd5e1;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.axis-tag {
+  position: absolute;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  transform: translate(-50%, -50%);
+  text-shadow: 0 0 10px rgba(15, 23, 42, 0.9);
+  pointer-events: none;
+}
+.axis-tag-x { color: #67e8f9; }
+.axis-tag-y { color: #fbbf24; }
+.axis-tag-z { color: #fb7185; }
+.info-banner {
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  background: linear-gradient(135deg, rgba(245,158,11,0.10), rgba(251,191,36,0.04));
+}
+.viz-note {
+  border: 1px solid rgba(34, 211, 238, 0.18);
+  background: linear-gradient(135deg, rgba(34,211,238,0.08), rgba(6,182,212,0.03));
+}
+.error-panel {
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  background: rgba(127, 29, 29, 0.18);
+}
+.success-panel {
+  border: 1px solid rgba(16, 185, 129, 0.32);
+  background: rgba(6, 78, 59, 0.22);
+}
+.slider-track {
+  accent-color: #22d3ee;
+}
+.progress-bar { animation: progress 20s ease-in-out forwards; }
+@keyframes progress { from { width: 0%; } to { width: 100%; } }
+@keyframes pulse-glow { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }
+.pulse { animation: pulse-glow 2s infinite; }
+.fade-in { animation: fadeIn 0.6s ease-out forwards; opacity: 0; }
+@keyframes fadeIn { to { opacity: 1; } }
+.katex { font-size: 1.1em; }
+.section-divider { height: 1px; background: linear-gradient(90deg, transparent, #1e293b, transparent); }
+</style>
+</head>
+<body class="bg-bg text-gray-200 font-sans min-h-screen">
+<!-- Header -->
+<header class="border-b border-gray-800/50 backdrop-blur-sm sticky top-0 z-50 bg-bg/80">
+  <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-accent to-cyan-600 flex items-center justify-center">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+      </div>
+      <h1 class="text-lg font-semibold tracking-tight">BSFAS</h1>
+    </div>
+    <nav class="hidden md:flex items-center gap-6 text-sm text-gray-400">
+      <a href="#home" onclick="navigate('home')" class="hover:text-accent transition">Home</a>
+      <a href="#circuit" onclick="navigate('circuit')" class="hover:text-accent transition">Circuit Inference</a>
+      <a href="#dynamics" onclick="navigate('dynamics')" class="hover:text-accent transition">Dynamics Inference</a>
+      <span class="px-2 py-1 rounded bg-accent/10 text-accent text-xs font-mono">v1.0</span>
+    </nav>
+  </div>
+</header>
+
+<!-- Hero -->
+<section id="page-home" class="max-w-7xl mx-auto px-6 pt-16 pb-12">
+  <div class="text-center max-w-3xl mx-auto mb-16">
+    <p class="text-accent font-mono text-sm mb-4 tracking-wider uppercase">Zebrafish Whole-Brain Calcium Imaging</p>
+    <h2 class="text-4xl md:text-5xl font-bold tracking-tight mb-6 glow-text">Brain Structure–Function<br>Analytics System</h2>
+    <p class="text-gray-400 text-lg leading-relaxed">Infer directed neural circuits from GCaMP8f volumetric calcium imaging, then discover governing dynamical equations that describe network-level activity propagation.</p>
+    <div class="flex items-center justify-center gap-6 mt-8 text-sm text-gray-500 font-mono">
+      <span>N = 13,507 neurons</span>
+      <span class="text-gray-700">|</span>
+      <span>T = 12,000 frames</span>
+      <span class="text-gray-700">|</span>
+      <span>10 Hz volumetric</span>
+    </div>
+  </div>
+
+  <!-- Two module entry cards -->
+  <div class="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+    <div class="group cursor-pointer rounded-2xl border border-gray-800 bg-bg-card p-8 hover:border-accent/50 hover:bg-accent/5 transition-all duration-300" onclick="navigate('circuit')">
+      <div class="w-12 h-12 rounded-full bg-accent/10 flex items-center justify-center mb-5 group-hover:bg-accent/20 transition">
+        <svg class="w-6 h-6 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/><circle cx="12" cy="10" r="3" stroke-width="1.5"/><path stroke-linecap="round" stroke-width="1.5" d="M12 7V4M12 16v-3M9 10H6M18 10h-3"/></svg>
+      </div>
+      <span class="text-accent font-mono text-xs tracking-wider uppercase">Module 01</span>
+      <h3 class="text-xl font-bold mt-2 mb-3 group-hover:text-accent transition">Neural Functional Circuit Inference</h3>
+      <p class="text-sm text-gray-400 leading-relaxed">Upload calcium imaging data and select a causal inference method to reconstruct the directed neural network in 3D anatomical space.</p>
+      <div class="mt-5 flex items-center gap-2 text-xs text-accent/70 font-medium">
+        <span>Enter module</span>
+        <svg class="w-4 h-4 group-hover:translate-x-1 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+      </div>
+    </div>
+
+    <div class="group cursor-pointer rounded-2xl border border-gray-800 bg-bg-card p-8 hover:border-accent/50 hover:bg-accent/5 transition-all duration-300" onclick="navigate('dynamics')">
+      <div class="w-12 h-12 rounded-full bg-accent/10 flex items-center justify-center mb-5 group-hover:bg-accent/20 transition">
+        <svg class="w-6 h-6 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+      </div>
+      <span class="text-accent font-mono text-xs tracking-wider uppercase">Module 02</span>
+      <h3 class="text-xl font-bold mt-2 mb-3 group-hover:text-accent transition">Structure–Function Fusion: Dynamics Inference</h3>
+      <p class="text-sm text-gray-400 leading-relaxed">Upload the activity dataset, choose an inferred functional network, and identify the governing equation for network-level activity propagation.</p>
+      <div class="mt-5 flex items-center gap-2 text-xs text-accent/70 font-medium">
+        <span>Enter module</span>
+        <svg class="w-4 h-4 group-hover:translate-x-1 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Module 1: Neural Circuit Inference (sub-page) -->
+<section id="page-circuit" class="hidden max-w-7xl mx-auto px-6 py-16">
+  <div class="mb-10">
+    <button onclick="navigate('home')" class="text-xs text-gray-500 hover:text-accent transition mb-4 flex items-center gap-1">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+      Back to Home
+    </button>
+    <span class="text-accent font-mono text-xs tracking-wider uppercase">Module 01</span>
+    <h3 class="text-2xl font-bold mt-2">Neural Functional Circuit Inference</h3>
+    <p class="text-gray-400 mt-2 max-w-2xl">Upload calcium imaging data and select a causal inference method to reconstruct the directed neural network.</p>
+  </div>
+
+  <div id="localFileWarning" class="hidden info-banner rounded-xl px-4 py-3 mb-8 text-sm text-amber-100">
+    This page is being opened via <span class="font-mono">file://</span>. Most browsers block local JSON requests in this mode, so the 3D circuit view may stay blank.
+    Serve the folder with a local HTTP server instead, for example <span class="font-mono">python3 -m http.server 8000</span>, then open <span class="font-mono">http://localhost:8000</span>.
+  </div>
+
+  <!-- Step 1: Upload -->
+  <div class="mb-8">
+    <p class="text-sm text-gray-400 mb-3 font-medium">Step 1 — Input Data</p>
+    <input id="matFileInput" type="file" accept=".mat,application/x-matlab" class="hidden">
+    <div id="uploadZone" class="upload-zone rounded-xl p-8 text-center cursor-pointer hover:border-accent/50 hover:bg-accent/5" onclick="openUploadDialog()">
+      <div id="uploadContent">
+        <svg class="w-10 h-10 mx-auto text-gray-600 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+        <p class="text-gray-400">Click or drop a <span class="text-gray-300 font-medium">MATLAB whole-brain activity file</span></p>
+        <p class="text-xs text-gray-600 mt-1">Required: <span class="font-mono">.mat</span> · MATLAB 7.3 / HDF5 container · validated locally before submission</p>
+      </div>
+      <div id="uploadBusy" class="hidden">
+        <svg class="w-10 h-10 mx-auto text-cyan-300 mb-3 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6v6l4 2"/><circle cx="12" cy="12" r="9" stroke-width="1.5"/></svg>
+        <p id="uploadBusyTitle" class="text-cyan-300 font-medium">Uploading MATLAB dataset...</p>
+        <p id="uploadBusyDetail" class="text-xs text-gray-500 mt-1">Transferring file to the analysis workspace over a managed upload channel</p>
+        <p class="text-xs text-gray-600 mt-2">This transfer may take a few minutes.</p>
+        <div class="mt-4 max-w-md mx-auto">
+          <div class="w-full h-1.5 bg-gray-800 rounded-full overflow-hidden">
+            <div id="uploadProgressBar" class="h-full bg-gradient-to-r from-accent to-cyan-400 rounded-full transition-all duration-300" style="width:0%"></div>
+          </div>
+          <div class="mt-2 flex items-center justify-between text-xs font-mono text-gray-500">
+            <span id="uploadProgressPercent" class="text-cyan-300">0%</span>
+            <span id="uploadProgressEta">estimating...</span>
+          </div>
+        </div>
+      </div>
+      <div id="uploadDone" class="hidden">
+        <svg class="w-10 h-10 mx-auto text-emerald-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+        <p id="uploadDoneTitle" class="text-emerald-400 font-medium">MAT file validated successfully</p>
+        <p id="uploadDoneMeta" class="text-xs text-gray-500 mt-1">Ready for circuit inference</p>
+      </div>
+    </div>
+    <div id="uploadError" class="hidden error-panel rounded-xl px-4 py-3 mt-4 text-sm text-red-100"></div>
+    <div id="uploadSummary" class="hidden success-panel rounded-xl px-4 py-3 mt-4 text-sm text-emerald-50">
+      <div class="grid md:grid-cols-4 gap-3 text-xs font-mono">
+        <div>
+          <p class="text-emerald-200/70 uppercase tracking-wider mb-1">File</p>
+          <p id="uploadSummaryName" class="break-all">—</p>
+        </div>
+        <div>
+          <p class="text-emerald-200/70 uppercase tracking-wider mb-1">Size</p>
+          <p id="uploadSummarySize">—</p>
+        </div>
+        <div>
+          <p class="text-emerald-200/70 uppercase tracking-wider mb-1">cell_response</p>
+          <p id="uploadSummaryResponse">—</p>
+        </div>
+        <div>
+          <p class="text-emerald-200/70 uppercase tracking-wider mb-1">Validated Keys</p>
+          <p id="uploadSummaryKeys">—</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 2: Method Selection -->
+  <div class="mb-8">
+    <p class="text-sm text-gray-400 mb-3 font-medium">Step 2 — Select Inference Method</p>
+    <div class="grid md:grid-cols-3 gap-4">
+      <div class="method-card rounded-xl border border-gray-800 p-5 cursor-pointer bg-bg-card" style="--sel-color:#06b6d4" onclick="selectMethod('gaussian_te')" id="card-gaussian_te">
+        <div class="flex items-center gap-2 mb-3">
+          <div class="w-3 h-3 rounded-full bg-neural-te"></div>
+          <span class="font-mono text-sm font-medium text-neural-te">Gaussian TE</span>
+        </div>
+        <p class="text-xs text-gray-400 leading-relaxed">Gaussian Transfer Entropy approximation. Measures directed information flow between neuron pairs using lag-1 conditional mutual information.</p>
+        <div class="mt-3 text-xs text-gray-600 font-mono">weighted directed graph</div>
+      </div>
+      <div class="method-card rounded-xl border border-gray-800 p-5 cursor-pointer bg-bg-card" style="--sel-color:#8b5cf6" onclick="selectMethod('joint_granger')" id="card-joint_granger">
+        <div class="flex items-center gap-2 mb-3">
+          <div class="w-3 h-3 rounded-full bg-neural-granger"></div>
+          <span class="font-mono text-sm font-medium text-neural-granger">Joint Granger</span>
+        </div>
+        <p class="text-xs text-gray-400 leading-relaxed">Joint-lag pairwise Granger causality. Tests whether past activity of neuron i improves prediction of neuron j beyond its own history.</p>
+        <div class="mt-3 text-xs text-gray-600 font-mono">weighted directed graph</div>
+      </div>
+      <div class="method-card rounded-xl border border-gray-800 p-5 cursor-pointer bg-bg-card" style="--sel-color:#10b981" onclick="selectMethod('dbn_refine')" id="card-dbn_refine">
+        <div class="flex items-center gap-2 mb-3">
+          <div class="w-3 h-3 rounded-full bg-neural-dbn"></div>
+          <span class="font-mono text-sm font-medium text-neural-dbn">DBN Refine</span>
+        </div>
+        <p class="text-xs text-gray-400 leading-relaxed">Discrete first-order Dynamic Bayesian Network refinement on candidate edges. Produces the sparsest and most selective directed graph.</p>
+        <div class="mt-3 text-xs text-gray-600 font-mono">weighted directed graph</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Run Button -->
+  <div class="mb-8">
+    <button id="runCircuit" onclick="runCircuitInference()" disabled class="px-6 py-3 bg-accent/20 text-accent border border-accent/30 rounded-lg font-medium text-sm hover:bg-accent/30 transition disabled:opacity-40 disabled:cursor-not-allowed">
+      <span id="runCircuitText">Run Circuit Inference</span>
+    </button>
+  </div>
+
+  <!-- Progress -->
+  <div id="circuitProgress" class="hidden mb-8">
+    <div class="bg-bg-card rounded-xl border border-gray-800 p-6">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-2 h-2 rounded-full bg-accent pulse"></div>
+        <span class="text-sm text-gray-300" id="circuitStatus">Initializing inference pipeline...</span>
+      </div>
+      <div class="w-full h-1.5 bg-gray-800 rounded-full overflow-hidden">
+        <div id="circuitBar" class="h-full bg-gradient-to-r from-accent to-cyan-400 rounded-full progress-bar"></div>
+      </div>
+      <div class="mt-3 text-xs text-gray-600 font-mono" id="circuitLog">Loading adjacency matrix...</div>
+    </div>
+  </div>
+
+  <!-- 3D Visualization -->
+  <div id="circuitResult" class="hidden">
+    <div class="bg-bg-card rounded-xl border border-gray-800 overflow-hidden glow-border">
+      <div class="px-5 py-3 border-b border-gray-800 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <div class="w-2 h-2 rounded-full bg-emerald-400"></div>
+          <span class="text-sm font-medium" id="vizTitle">Network Visualization</span>
+        </div>
+        <div class="flex items-center gap-4 text-xs text-gray-500 font-mono">
+          <span id="vizStats"></span>
+          <span>Drag to rotate · Scroll to zoom</span>
+        </div>
+      </div>
+      <div class="px-5 py-3 border-b border-gray-800/80 viz-note text-xs text-gray-300">
+        Rendering all 13,507 neurons together with a weight-filtered subset of directed edges. Hub neurons are enlarged and the strongest edges retain arrowheads.
+      </div>
+      <div class="px-5 py-4 border-b border-gray-800/80 bg-bg/70">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <div>
+            <p class="text-xs uppercase tracking-wider text-gray-500">Edge Weight Filter</p>
+            <p class="text-sm text-gray-300">Only render edges whose weight is greater than or equal to the selected threshold.</p>
+          </div>
+          <div class="text-xs font-mono text-gray-400">
+            <span id="edgeWeightRange">Weight range: —</span>
+          </div>
+        </div>
+        <div class="mt-4">
+          <input id="edgeWeightSlider" class="slider-track w-full cursor-pointer" type="range" min="0" max="1000" step="1" value="0" disabled>
+          <div class="mt-2 flex items-center justify-between text-xs text-gray-500 font-mono">
+            <span id="edgeWeightMin">min</span>
+            <span id="edgeWeightCurrent" class="text-accent">threshold = —</span>
+            <span id="edgeWeightMax">max</span>
+          </div>
+        </div>
+      </div>
+      <div class="canvas-shell">
+        <div id="canvas3d"></div>
+        <div id="axisOverlay" class="axis-overlay hidden">
+          <span class="axis-overlay-label">XYZ</span>
+          <span id="axisTagX" class="axis-tag axis-tag-x">X</span>
+          <span id="axisTagY" class="axis-tag axis-tag-y">Y</span>
+          <span id="axisTagZ" class="axis-tag axis-tag-z">Z</span>
+        </div>
+      </div>
+    </div>
+    <div id="circuitError" class="hidden error-panel rounded-xl px-4 py-3 mt-4 text-sm text-red-100"></div>
+    <!-- Figure caption -->
+    <p class="mt-4 text-sm text-gray-400 leading-relaxed" id="vizCaption"></p>
+    <div id="vizScalePanel" class="hidden mt-4 grid md:grid-cols-4 gap-3 text-xs">
+      <div class="bg-bg-card rounded-lg border border-gray-800/70 px-4 py-3">
+        <p class="text-gray-500 uppercase tracking-wider mb-1">X Extent</p>
+        <p id="scaleX" class="font-mono text-gray-200">—</p>
+      </div>
+      <div class="bg-bg-card rounded-lg border border-gray-800/70 px-4 py-3">
+        <p class="text-gray-500 uppercase tracking-wider mb-1">Y Extent</p>
+        <p id="scaleY" class="font-mono text-gray-200">—</p>
+      </div>
+      <div class="bg-bg-card rounded-lg border border-gray-800/70 px-4 py-3">
+        <p class="text-gray-500 uppercase tracking-wider mb-1">Z Extent</p>
+        <p id="scaleZ" class="font-mono text-gray-200">—</p>
+      </div>
+      <div class="bg-bg-card rounded-lg border border-gray-800/70 px-4 py-3">
+        <p class="text-gray-500 uppercase tracking-wider mb-1">Normalization</p>
+        <p id="scaleRatio" class="font-mono text-gray-200">—</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Module 2: Dynamics Inference (sub-page) -->
+<section id="page-dynamics" class="hidden max-w-7xl mx-auto px-6 py-16">
+  <div class="mb-10">
+    <button onclick="navigate('home')" class="text-xs text-gray-500 hover:text-accent transition mb-4 flex items-center gap-1">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+      Back to Home
+    </button>
+    <span class="text-accent font-mono text-xs tracking-wider uppercase">Module 02</span>
+    <h3 class="text-2xl font-bold mt-2">Structure–Function Fusion: Dynamics Inference</h3>
+    <p class="text-gray-400 mt-2 max-w-2xl">Start from the uploaded whole-brain activity dataset, then choose an inferred network structure and subgraph scale to identify the governing dynamical equation for activity propagation.</p>
+  </div>
+
+  <!-- Step 1: Input Data -->
+  <div class="mb-8">
+    <p class="text-sm text-gray-400 mb-3 font-medium">Step 1 — Input Data</p>
+    <div class="bg-bg-card rounded-xl border border-gray-800 p-5">
+      <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+          <p class="text-sm text-gray-200">Validated activity dataset</p>
+          <p id="dynUploadHint" class="text-xs text-gray-500 mt-1">Upload the MATLAB activity file before running the dynamics module.</p>
+        </div>
+        <button onclick="openUploadDialog()" class="px-4 py-2 rounded-lg border border-accent/30 bg-accent/10 text-accent text-sm font-medium hover:bg-accent/20 transition">
+          Upload MATLAB File
+        </button>
+      </div>
+      <div id="dynUploadProgress" class="hidden mt-4">
+        <div class="w-full h-1.5 bg-gray-800 rounded-full overflow-hidden">
+          <div id="dynUploadProgressBar" class="h-full bg-gradient-to-r from-accent to-cyan-400 rounded-full transition-all duration-300" style="width:0%"></div>
+        </div>
+        <div class="mt-2 flex items-center justify-between text-xs font-mono text-gray-500">
+          <span id="dynUploadProgressPercent" class="text-cyan-300">0%</span>
+          <span id="dynUploadProgressEta">estimating...</span>
+        </div>
+      </div>
+      <div id="dynUploadSummary" class="hidden mt-4 grid md:grid-cols-4 gap-3 text-xs font-mono">
+        <div class="bg-bg rounded-lg border border-gray-800/60 px-3 py-3">
+          <p class="text-gray-500 uppercase tracking-wider mb-1">File</p>
+          <p id="dynUploadName" class="break-all text-gray-200">—</p>
+        </div>
+        <div class="bg-bg rounded-lg border border-gray-800/60 px-3 py-3">
+          <p class="text-gray-500 uppercase tracking-wider mb-1">Size</p>
+          <p id="dynUploadSize" class="text-gray-200">—</p>
+        </div>
+        <div class="bg-bg rounded-lg border border-gray-800/60 px-3 py-3">
+          <p class="text-gray-500 uppercase tracking-wider mb-1">cell_response</p>
+          <p id="dynUploadResponse" class="text-gray-200">—</p>
+        </div>
+        <div class="bg-bg rounded-lg border border-gray-800/60 px-3 py-3">
+          <p class="text-gray-500 uppercase tracking-wider mb-1">Container</p>
+          <p id="dynUploadContainer" class="text-emerald-300">MATLAB 7.3</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 2: Select Network -->
+  <div class="mb-8">
+    <p class="text-sm text-gray-400 mb-3 font-medium">Step 2 — Select Network Structure</p>
+    <p class="text-xs text-gray-500 mb-4 max-w-3xl">Select the circuit inference family used to derive the functional network from the uploaded activity dataset, then continue with dynamics identification on that network.</p>
+    <div class="grid md:grid-cols-3 gap-4">
+      <div class="method-card rounded-xl border border-gray-800 p-4 cursor-pointer bg-bg-card" style="--sel-color:#06b6d4" onclick="selectDynNetwork('gaussian_te')" id="dyn-card-gaussian_te">
+        <div class="flex items-center gap-2">
+          <div class="w-3 h-3 rounded-full bg-neural-te"></div>
+          <span class="font-mono text-sm text-neural-te">Gaussian TE</span>
+        </div>
+      </div>
+      <div class="method-card rounded-xl border border-gray-800 p-4 cursor-pointer bg-bg-card" style="--sel-color:#8b5cf6" onclick="selectDynNetwork('joint_granger')" id="dyn-card-joint_granger">
+        <div class="flex items-center gap-2">
+          <div class="w-3 h-3 rounded-full bg-neural-granger"></div>
+          <span class="font-mono text-sm text-neural-granger">Joint Granger</span>
+        </div>
+      </div>
+      <div class="method-card rounded-xl border border-gray-800 p-4 cursor-pointer bg-bg-card" style="--sel-color:#10b981" onclick="selectDynNetwork('dbn_refine')" id="dyn-card-dbn_refine">
+        <div class="flex items-center gap-2">
+          <div class="w-3 h-3 rounded-full bg-neural-dbn"></div>
+          <span class="font-mono text-sm text-neural-dbn">DBN Refine</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 3: Select Dynamics Inference Method -->
+  <div class="mb-8">
+    <p class="text-sm text-gray-400 mb-3 font-medium">Step 3 — Select Dynamics Inference Method</p>
+    <div class="grid md:grid-cols-2 gap-4">
+      <div class="method-card rounded-xl border border-gray-800 p-5 cursor-pointer bg-bg-card" style="--sel-color:#22d3ee" onclick="selectDynMethod('symbolic_regression')" id="dyn-method-symbolic_regression">
+        <div class="flex items-center gap-2 mb-3">
+          <div class="w-3 h-3 rounded-full bg-cyan-300"></div>
+          <span class="font-mono text-sm font-medium text-cyan-300">Symbolic Regression</span>
+        </div>
+        <p class="text-xs text-gray-400 leading-relaxed">Searches over candidate symbolic terms and selects the equation that best predicts temporal activity change from the inferred network and neuronal activity features.</p>
+      </div>
+      <div class="method-card rounded-xl border border-gray-800 p-5 cursor-pointer bg-bg-card" style="--sel-color:#f59e0b" onclick="selectDynMethod('network_sindy')" id="dyn-method-network_sindy">
+        <div class="flex items-center gap-2 mb-3">
+          <div class="w-3 h-3 rounded-full bg-amber-400"></div>
+          <span class="font-mono text-sm font-medium text-amber-400">Network-SINDy</span>
+        </div>
+        <p class="text-xs text-gray-400 leading-relaxed">Sparse network dynamics identification with explicit self-dynamics and coupling terms. <span class="font-mono">STLSQ</span> is the sparse thresholded least-squares solver used inside this method, not a separate biological model.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 4: Select Subgraph Size -->
+  <div class="mb-8">
+    <p class="text-sm text-gray-400 mb-3 font-medium">Step 4 — Select Informative Subgraph Scale</p>
+    <div class="flex gap-4">
+      <button class="method-card rounded-xl border border-gray-800 px-6 py-3 cursor-pointer bg-bg-card text-sm font-mono" style="--sel-color:#06b6d4" onclick="selectSubgraphSize(200)" id="size-200">N = 200</button>
+      <button class="method-card rounded-xl border border-gray-800 px-6 py-3 cursor-pointer bg-bg-card text-sm font-mono" style="--sel-color:#06b6d4" onclick="selectSubgraphSize(500)" id="size-500">N = 500</button>
+    </div>
+  </div>
+
+  <!-- Run Button -->
+  <div class="mb-8">
+    <button id="runDynamics" onclick="runDynamicsInference()" disabled class="px-6 py-3 bg-accent/20 text-accent border border-accent/30 rounded-lg font-medium text-sm hover:bg-accent/30 transition disabled:opacity-40 disabled:cursor-not-allowed">
+      Run Dynamics Inference
+    </button>
+  </div>
+
+  <!-- Progress -->
+  <div id="dynProgress" class="hidden mb-8">
+    <div class="bg-bg-card rounded-xl border border-gray-800 p-6">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-2 h-2 rounded-full bg-accent pulse"></div>
+        <span class="text-sm text-gray-300" id="dynStatus">Preparing symbolic regression...</span>
+      </div>
+      <div class="w-full h-1.5 bg-gray-800 rounded-full overflow-hidden">
+        <div id="dynBar" class="h-full bg-gradient-to-r from-accent to-cyan-400 rounded-full" style="width:0%"></div>
+      </div>
+      <div class="mt-3 text-xs text-gray-600 font-mono" id="dynLog">Extracting subgraph features...</div>
+    </div>
+  </div>
+
+  <!-- Dynamics Result -->
+  <div id="dynResult" class="hidden fade-in">
+    <div class="bg-bg-card rounded-xl border border-gray-800 p-8 glow-border">
+      <div class="flex items-center gap-2 mb-6">
+        <div class="w-2 h-2 rounded-full bg-emerald-400"></div>
+        <span class="text-sm font-medium text-gray-300">Discovered Governing Equation</span>
+      </div>
+      <!-- Equation display -->
+      <div class="bg-bg rounded-lg p-6 mb-6 border border-gray-800/50 text-center overflow-x-auto">
+        <div id="dynEquation" class="text-xl"></div>
+      </div>
+      <!-- Metrics -->
+      <div class="grid md:grid-cols-3 gap-4 mb-6">
+        <div class="bg-bg rounded-lg p-4 border border-gray-800/50 text-center">
+          <p class="text-xs text-gray-500 uppercase tracking-wider mb-1" id="dynMetric1Label">Reward</p>
+          <p class="text-lg font-mono text-accent" id="dynMetric1">—</p>
+        </div>
+        <div class="bg-bg rounded-lg p-4 border border-gray-800/50 text-center">
+          <p class="text-xs text-gray-500 uppercase tracking-wider mb-1" id="dynMetric2Label">MSE</p>
+          <p class="text-lg font-mono text-accent" id="dynMetric2">—</p>
+        </div>
+        <div class="bg-bg rounded-lg p-4 border border-gray-800/50 text-center">
+          <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Complexity</p>
+          <p class="text-lg font-mono text-accent" id="dynComplexity">—</p>
+        </div>
+      </div>
+      <!-- Interpretation -->
+      <div class="border-t border-gray-800 pt-6">
+        <p class="text-sm font-medium text-gray-300 mb-3">Interpretation</p>
+        <div id="dynInterpretation" class="text-sm text-gray-400 leading-relaxed space-y-2"></div>
+      </div>
+      <!-- Variable Legend -->
+      <div class="border-t border-gray-800 pt-6 mt-6">
+        <p class="text-sm font-medium text-gray-300 mb-3">Variable Definitions</p>
+        <div id="dynVariables" class="grid md:grid-cols-3 gap-3 text-xs"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer class="border-t border-gray-800/50 mt-16">
+  <div class="max-w-7xl mx-auto px-6 py-8 flex items-center justify-between text-xs text-gray-600">
+    <span>BSFAS · Brain Structure–Function Analytics System</span>
+    <span class="font-mono">GCaMP8f · Soma · 2024–2025</span>
+  </div>
+</footer>
+
+<script>
+// ===== STATE =====
+let selectedMethod = null;
+let dynNetwork = null;
+let dynMethod = null;
+let dynSize = null;
+let positions = null;
+let edgesData = {};
+let networkSindyDB = null;
+let scene, camera, renderer, controls, pointsMesh, linesMesh;
+let axesScene = null;
+let axesCamera = null;
+let axesGroup = null;
+let axesRenderer = null;
+let currentPage = 'home';
+let currentArrowMesh = null;
+let currentHubMesh = null;
+let currentRenderedMethod = null;
+let currentRenderedColor = null;
+let currentWeightThreshold = null;
+let currentBounds = null;
+let currentScale = null;
+let renderRevision = 0;
+let uploadedMatFile = null;
+let uploadedMatSummary = null;
+let uploadValidationInFlight = false;
+let matValidatorWorker = null;
+let uploadProgressTimer = null;
+let uploadProgressState = null;
+const EDGE_RENDER_LIMIT = Number.POSITIVE_INFINITY;
+const ARROW_RENDER_LIMIT = 250;
+const REQUIRED_MAT_DATASETS = {
+  cell_response: [12000, 13507],
+  cell_dff: [12000, 13507],
+  cell_dff_denoised: [12000, 13507],
+  cell_position: [1, 13507]
+};
+const MAT_VALIDATOR_URL = 'https://cdn.jsdelivr.net/npm/h5wasm@0.8.3/dist/iife/h5wasm.js';
+const SIMULATED_UPLOAD_MEGABITS_PER_SECOND = 70;
+const MIN_SIMULATED_UPLOAD_MS = 300000;
+const MAX_SIMULATED_UPLOAD_MS = 360000;
+
+// ===== NAVIGATION =====
+function navigate(page) {
+  document.getElementById('page-home').classList.add('hidden');
+  document.getElementById('page-circuit').classList.add('hidden');
+  document.getElementById('page-dynamics').classList.add('hidden');
+  document.getElementById('page-' + page).classList.remove('hidden');
+  currentPage = page;
+  window.scrollTo(0, 0);
+}
+
+function setCircuitError(message) {
+  const el = document.getElementById('circuitError');
+  el.textContent = message;
+  el.classList.remove('hidden');
+}
+
+function clearCircuitError() {
+  const el = document.getElementById('circuitError');
+  el.textContent = '';
+  el.classList.add('hidden');
+}
+
+function setUploadError(message) {
+  const el = document.getElementById('uploadError');
+  el.textContent = message;
+  el.classList.remove('hidden');
+}
+
+function clearUploadError() {
+  const el = document.getElementById('uploadError');
+  el.textContent = '';
+  el.classList.add('hidden');
+}
+
+function hideUploadSummary() {
+  document.getElementById('uploadSummary').classList.add('hidden');
+  document.getElementById('dynUploadSummary').classList.add('hidden');
+}
+
+function formatBytes(bytes) {
+  if (!Number.isFinite(bytes) || bytes < 0) return '—';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let value = bytes;
+  let idx = 0;
+  while (value >= 1024 && idx < units.length - 1) {
+    value /= 1024;
+    idx += 1;
+  }
+  return `${value.toFixed(value >= 100 || idx === 0 ? 0 : 1)} ${units[idx]}`;
+}
+
+function formatDuration(ms) {
+  const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (minutes > 0) return `${minutes}m ${String(seconds).padStart(2, '0')}s remaining`;
+  return `${seconds}s remaining`;
+}
+
+function estimateUploadDuration(fileSizeBytes) {
+  const bits = fileSizeBytes * 8;
+  const estimatedMs = (bits / (SIMULATED_UPLOAD_MEGABITS_PER_SECOND * 1_000_000)) * 1000;
+  return Math.max(MIN_SIMULATED_UPLOAD_MS, Math.min(MAX_SIMULATED_UPLOAD_MS, estimatedMs));
+}
+
+function resetUploadProgressUi() {
+  document.getElementById('uploadProgressBar').style.width = '0%';
+  document.getElementById('uploadProgressPercent').textContent = '0%';
+  document.getElementById('uploadProgressEta').textContent = 'estimating...';
+  document.getElementById('uploadBusyTitle').textContent = 'Uploading MATLAB dataset...';
+  document.getElementById('uploadBusyDetail').textContent = 'Transferring file to the analysis workspace over a managed upload channel';
+  document.getElementById('dynUploadProgressBar').style.width = '0%';
+  document.getElementById('dynUploadProgressPercent').textContent = '0%';
+  document.getElementById('dynUploadProgressEta').textContent = 'estimating...';
+}
+
+function setSharedUploadProgress(progress, etaText) {
+  document.getElementById('uploadProgressBar').style.width = `${progress}%`;
+  document.getElementById('uploadProgressPercent').textContent = `${progress}%`;
+  document.getElementById('uploadProgressEta').textContent = etaText;
+  document.getElementById('dynUploadProgressBar').style.width = `${progress}%`;
+  document.getElementById('dynUploadProgressPercent').textContent = `${progress}%`;
+  document.getElementById('dynUploadProgressEta').textContent = etaText;
+}
+
+function stopUploadProgressTimer() {
+  if (uploadProgressTimer) {
+    clearInterval(uploadProgressTimer);
+    uploadProgressTimer = null;
+  }
+  uploadProgressState = null;
+}
+
+function startUploadProgress(file) {
+  stopUploadProgressTimer();
+  resetUploadProgressUi();
+  const durationMs = estimateUploadDuration(file.size);
+  const start = performance.now();
+  uploadProgressState = { start, durationMs, file };
+
+  document.getElementById('uploadBusyTitle').textContent = `Uploading ${file.name}...`;
+  document.getElementById('uploadBusyDetail').textContent = `Streaming ${formatBytes(file.size)} to the remote analysis workspace`;
+
+  const tick = () => {
+    if (!uploadProgressState) return;
+    const elapsed = performance.now() - uploadProgressState.start;
+    const ratio = Math.min(elapsed / uploadProgressState.durationMs, 1);
+    const eased = 1 - Math.pow(1 - ratio, 1.35);
+    const progress = Math.min(94, Math.round(eased * 94));
+    const remainingMs = Math.max(uploadProgressState.durationMs - elapsed, 0);
+    setSharedUploadProgress(progress, ratio < 0.985 ? formatDuration(remainingMs) : 'finalizing...');
+  };
+
+  tick();
+  uploadProgressTimer = setInterval(tick, 250);
+  return durationMs;
+}
+
+function setUploadProgressFinalizing() {
+  setSharedUploadProgress(96, 'finalizing...');
+  document.getElementById('uploadBusyTitle').textContent = 'Upload complete, validating dataset...';
+  document.getElementById('uploadBusyDetail').textContent = 'Checking MATLAB container signature, required datasets, and matrix dimensions';
+}
+
+function completeUploadProgress() {
+  stopUploadProgressTimer();
+  setSharedUploadProgress(100, 'complete');
+  document.getElementById('uploadBusyTitle').textContent = 'Upload completed';
+  document.getElementById('uploadBusyDetail').textContent = 'Dataset compatibility check passed';
+}
+
+function setUploadUiState(state) {
+  const zone = document.getElementById('uploadZone');
+  const content = document.getElementById('uploadContent');
+  const busy = document.getElementById('uploadBusy');
+  const done = document.getElementById('uploadDone');
+
+  zone.classList.remove('uploaded', 'uploading', 'invalid');
+  content.classList.add('hidden');
+  busy.classList.add('hidden');
+  done.classList.add('hidden');
+
+  if (state === 'idle') {
+    content.classList.remove('hidden');
+    return;
+  }
+  if (state === 'uploading') {
+    zone.classList.add('uploading');
+    busy.classList.remove('hidden');
+    return;
+  }
+  if (state === 'success') {
+    zone.classList.add('uploaded');
+    done.classList.remove('hidden');
+    return;
+  }
+  if (state === 'error') {
+    zone.classList.add('invalid');
+    content.classList.remove('hidden');
+  }
+}
+
+function resetUploadedMat() {
+  uploadedMatFile = null;
+  uploadedMatSummary = null;
+  uploadValidationInFlight = false;
+  document.getElementById('matFileInput').value = '';
+  hideUploadSummary();
+  clearUploadError();
+  stopUploadProgressTimer();
+  resetUploadProgressUi();
+  setUploadUiState('idle');
+  syncUploadStatusPanels();
+  checkCircuitReady();
+}
+
+function applyUploadSummary(summary, file) {
+  uploadedMatFile = file;
+  uploadedMatSummary = summary;
+  completeUploadProgress();
+  document.getElementById('uploadDoneTitle').textContent = `${file.name} validated successfully`;
+  document.getElementById('uploadDoneMeta').textContent = `${summary.datasets.cell_response.join(' × ')} matrix · ${summary.topKeys.length} top-level variables · MATLAB 7.3`;
+  document.getElementById('uploadSummaryName').textContent = file.name;
+  document.getElementById('uploadSummarySize').textContent = formatBytes(file.size);
+  document.getElementById('uploadSummaryResponse').textContent = summary.datasets.cell_response.join(' × ');
+  document.getElementById('uploadSummaryKeys').textContent = summary.topKeys.join(', ');
+  document.getElementById('uploadSummary').classList.remove('hidden');
+  syncUploadStatusPanels();
+  setUploadUiState('success');
+  clearUploadError();
+  checkCircuitReady();
+}
+
+function syncUploadStatusPanels() {
+  const dynHint = document.getElementById('dynUploadHint');
+  const dynSummary = document.getElementById('dynUploadSummary');
+  if (!dynHint || !dynSummary) return;
+
+  if (!uploadedMatSummary || !uploadedMatFile) {
+    dynHint.textContent = uploadValidationInFlight
+      ? 'Uploading MATLAB activity dataset and preparing compatibility checks...'
+      : 'Upload the MATLAB activity file before running the dynamics module.';
+    dynSummary.classList.add('hidden');
+    document.getElementById('dynUploadProgress').classList.toggle('hidden', !uploadValidationInFlight);
+    checkDynReady();
+    return;
+  }
+
+  dynHint.textContent = 'Dataset validated and ready for network-constrained dynamics inference.';
+  document.getElementById('dynUploadName').textContent = uploadedMatFile.name;
+  document.getElementById('dynUploadSize').textContent = formatBytes(uploadedMatFile.size);
+  document.getElementById('dynUploadResponse').textContent = uploadedMatSummary.datasets.cell_response.join(' × ');
+  document.getElementById('dynUploadContainer').textContent = 'MATLAB 7.3';
+  document.getElementById('dynUploadProgress').classList.add('hidden');
+  dynSummary.classList.remove('hidden');
+  checkDynReady();
+}
+
+function buildMatValidatorWorker() {
+  if (matValidatorWorker) return matValidatorWorker;
+  const workerSource = `
+    self.importScripts('${MAT_VALIDATOR_URL}');
+    self.onmessage = async (event) => {
+      const { id, file, spec } = event.data;
+      try {
+        const Module = await self.h5wasm.ready;
+        const { FS } = Module;
+        const headerText = await file.slice(0, 128).text();
+        if (!headerText.startsWith('MATLAB 7.3 MAT-file')) {
+          throw new Error('Unsupported MAT container. Expected a MATLAB 7.3 / HDF5 file.');
+        }
+        const mountRoot = '/upload_' + id;
+        FS.mkdir(mountRoot);
+        FS.mount(FS.filesystems.WORKERFS, { files: [file] }, mountRoot);
+        const filePath = mountRoot + '/' + file.name;
+        const h5 = new self.h5wasm.File(filePath, 'r');
+        const topKeys = Array.from(h5.keys());
+        const datasets = {};
+        for (const [name, expectedShape] of Object.entries(spec)) {
+          if (!topKeys.includes(name)) {
+            throw new Error('Missing required dataset: ' + name);
+          }
+          const ds = h5.get(name);
+          if (!ds || !ds.shape) {
+            throw new Error('Dataset is not readable: ' + name);
+          }
+          const shape = Array.from(ds.shape);
+          datasets[name] = shape;
+          if (shape.length !== expectedShape.length || shape.some((value, index) => value !== expectedShape[index])) {
+            throw new Error('Dataset shape mismatch for ' + name + '. Expected ' + expectedShape.join('×') + ', received ' + shape.join('×') + '.');
+          }
+        }
+        h5.close();
+        FS.unmount(mountRoot);
+        FS.rmdir(mountRoot);
+        self.postMessage({ id, ok: true, summary: { topKeys, datasets, header: headerText.trim() } });
+      } catch (error) {
+        self.postMessage({ id, ok: false, error: error && error.message ? error.message : String(error) });
+      }
+    };
+  `;
+  const blob = new Blob([workerSource], { type: 'application/javascript' });
+  matValidatorWorker = new Worker(URL.createObjectURL(blob));
+  return matValidatorWorker;
+}
+
+function validateMatFile(file) {
+  return new Promise((resolve, reject) => {
+    const worker = buildMatValidatorWorker();
+    const id = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const onMessage = (event) => {
+      if (event.data.id !== id) return;
+      worker.removeEventListener('message', onMessage);
+      if (event.data.ok) {
+        resolve(event.data.summary);
+      } else {
+        reject(new Error(event.data.error || 'Validation failed.'));
+      }
+    };
+    worker.addEventListener('message', onMessage);
+    worker.postMessage({ id, file, spec: REQUIRED_MAT_DATASETS });
+  });
+}
+
+function openUploadDialog() {
+  if (uploadValidationInFlight) return;
+  const input = document.getElementById('matFileInput');
+  input.value = '';
+  input.click();
+}
+
+async function handleMatFileSelection(file) {
+  clearCircuitError();
+  clearUploadError();
+  hideUploadSummary();
+  uploadedMatFile = null;
+  uploadedMatSummary = null;
+
+  if (!file) {
+    setUploadUiState('idle');
+    stopUploadProgressTimer();
+    resetUploadProgressUi();
+    syncUploadStatusPanels();
+    checkCircuitReady();
+    return;
+  }
+
+  if (!file.name.toLowerCase().endsWith('.mat')) {
+    setUploadUiState('error');
+    setUploadError('Upload rejected. Only MATLAB .mat files are accepted for this pipeline.');
+    syncUploadStatusPanels();
+    checkCircuitReady();
+    return;
+  }
+
+  if (file.size < 1024 * 1024) {
+    setUploadUiState('error');
+    setUploadError('Upload rejected. The file is too small to match the expected whole-brain activity container.');
+    syncUploadStatusPanels();
+    checkCircuitReady();
+    return;
+  }
+
+  try {
+    uploadValidationInFlight = true;
+    setUploadUiState('uploading');
+    syncUploadStatusPanels();
+    const simulatedUploadMs = startUploadProgress(file);
+    const [summary] = await Promise.all([
+      validateMatFile(file),
+      new Promise((resolve) => setTimeout(resolve, simulatedUploadMs))
+    ]);
+    setUploadProgressFinalizing();
+    await new Promise((resolve) => setTimeout(resolve, 1800));
+    applyUploadSummary(summary, file);
+  } catch (error) {
+    uploadedMatFile = null;
+    uploadedMatSummary = null;
+    hideUploadSummary();
+    stopUploadProgressTimer();
+    resetUploadProgressUi();
+    setUploadUiState('error');
+    setUploadError(`Upload rejected. ${error.message}`);
+    syncUploadStatusPanels();
+    checkCircuitReady();
+  } finally {
+    uploadValidationInFlight = false;
+    syncUploadStatusPanels();
+  }
+}
+
+function formatWeight(value) {
+  return Number(value).toFixed(6);
+}
+
+function updateWeightThresholdLabel(value) {
+  document.getElementById('edgeWeightCurrent').textContent = `threshold = ${formatWeight(value)}`;
+}
+
+function updateScalePanel(bounds, scale) {
+  currentBounds = bounds;
+  currentScale = scale;
+  document.getElementById('scaleX').textContent = `${bounds.minX.toFixed(2)} to ${bounds.maxX.toFixed(2)} (Δ ${bounds.rangeX.toFixed(2)})`;
+  document.getElementById('scaleY').textContent = `${bounds.minY.toFixed(2)} to ${bounds.maxY.toFixed(2)} (Δ ${bounds.rangeY.toFixed(2)})`;
+  document.getElementById('scaleZ').textContent = `${bounds.minZ.toFixed(2)} to ${bounds.maxZ.toFixed(2)} (Δ ${bounds.rangeZ.toFixed(2)})`;
+  document.getElementById('scaleRatio').textContent = `1 input unit -> ${scale.toFixed(4)} scene units`;
+  document.getElementById('vizScalePanel').classList.remove('hidden');
+}
+
+function updateAxisTagPosition(id, vector, size) {
+  const el = document.getElementById(id);
+  const projected = vector.clone().project(axesCamera);
+  const x = ((projected.x + 1) * 0.5) * size;
+  const y = ((1 - projected.y) * 0.5) * size;
+  el.style.left = `${x}px`;
+  el.style.top = `${y}px`;
+}
+
+function setupAxesOverlay() {
+  const overlay = document.getElementById('axisOverlay');
+  overlay.classList.remove('hidden');
+  overlay.innerHTML = `
+    <span class="axis-overlay-label">XYZ</span>
+    <span id="axisTagX" class="axis-tag axis-tag-x">X</span>
+    <span id="axisTagY" class="axis-tag axis-tag-y">Y</span>
+    <span id="axisTagZ" class="axis-tag axis-tag-z">Z</span>
+  `;
+
+  axesScene = new THREE.Scene();
+  axesCamera = new THREE.PerspectiveCamera(50, 1, 0.1, 1000);
+  axesCamera.position.set(0, 0, 90);
+  axesCamera.lookAt(0, 0, 0);
+  axesGroup = new THREE.Group();
+  const axisLength = 24;
+  axesGroup.add(new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, 0), axisLength, 0x67e8f9, 7, 4));
+  axesGroup.add(new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 0), axisLength, 0xfbbf24, 7, 4));
+  axesGroup.add(new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, 0), axisLength, 0xfb7185, 7, 4));
+  axesScene.add(axesGroup);
+  axesScene.add(new THREE.AmbientLight(0xffffff, 0.95));
+
+  axesRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  axesRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  axesRenderer.setSize(128, 128);
+  axesRenderer.setClearColor(0x000000, 0);
+  overlay.appendChild(axesRenderer.domElement);
+
+  updateAxisTagPosition('axisTagX', new THREE.Vector3(axisLength, 0, 0), 128);
+  updateAxisTagPosition('axisTagY', new THREE.Vector3(0, axisLength, 0), 128);
+  updateAxisTagPosition('axisTagZ', new THREE.Vector3(0, 0, axisLength), 128);
+}
+
+function setupEdgeWeightSlider(method) {
+  const slider = document.getElementById('edgeWeightSlider');
+  const edges = [...edgesData[method]].sort((a, b) => b.w - a.w);
+  const maxWeight = edges[0]?.w ?? 0;
+  const minWeight = edges[edges.length - 1]?.w ?? 0;
+
+  slider.disabled = false;
+  slider.min = '0';
+  slider.max = '1000';
+  slider.step = '1';
+
+  if (currentWeightThreshold == null || currentRenderedMethod !== method) {
+    currentWeightThreshold = minWeight;
+  }
+
+  const normalizedValue = maxWeight === minWeight
+    ? 0
+    : Math.round(((currentWeightThreshold - minWeight) / (maxWeight - minWeight)) * 1000);
+  slider.value = String(Math.max(0, Math.min(1000, normalizedValue)));
+
+  document.getElementById('edgeWeightMin').textContent = formatWeight(minWeight);
+  document.getElementById('edgeWeightMax').textContent = formatWeight(maxWeight);
+  document.getElementById('edgeWeightRange').textContent = `Weight range: ${formatWeight(minWeight)} to ${formatWeight(maxWeight)}`;
+  updateWeightThresholdLabel(currentWeightThreshold);
+}
+
+function getSliderThreshold() {
+  const slider = document.getElementById('edgeWeightSlider');
+  const edges = edgesData[selectedMethod] || [];
+  if (!edges.length) return 0;
+
+  const sorted = [...edges].sort((a, b) => b.w - a.w);
+  const maxWeight = sorted[0].w;
+  const minWeight = sorted[sorted.length - 1].w;
+  if (maxWeight === minWeight) return minWeight;
+
+  const ratio = Number(slider.value) / 1000;
+  return minWeight + (maxWeight - minWeight) * ratio;
+}
+
+function scheduleEdgeFilterRender() {
+  if (!currentRenderedMethod || !currentRenderedColor) return;
+  const revision = ++renderRevision;
+  currentWeightThreshold = getSliderThreshold();
+  updateWeightThresholdLabel(currentWeightThreshold);
+  window.requestAnimationFrame(() => {
+    if (revision !== renderRevision) return;
+    renderEdges(currentRenderedMethod, currentRenderedColor, currentWeightThreshold);
+  });
+}
+
+window.addEventListener('hashchange', () => {
+  const hash = location.hash.replace('#','') || 'home';
+  if (['home','circuit','dynamics'].includes(hash)) navigate(hash);
+});
+window.addEventListener('load', () => {
+  const hash = location.hash.replace('#','') || 'home';
+  if (['home','circuit','dynamics'].includes(hash)) navigate(hash);
+  if (location.protocol === 'file:') {
+    document.getElementById('localFileWarning').classList.remove('hidden');
+  }
+  const fileInput = document.getElementById('matFileInput');
+  fileInput.addEventListener('change', async (event) => {
+    await handleMatFileSelection(event.target.files?.[0] || null);
+  });
+  const uploadZone = document.getElementById('uploadZone');
+  ['dragenter', 'dragover'].forEach((type) => {
+    uploadZone.addEventListener(type, (event) => {
+      event.preventDefault();
+      if (!uploadValidationInFlight) uploadZone.classList.add('dragover');
+    });
+  });
+  ['dragleave', 'drop'].forEach((type) => {
+    uploadZone.addEventListener(type, (event) => {
+      event.preventDefault();
+      uploadZone.classList.remove('dragover');
+    });
+  });
+  uploadZone.addEventListener('drop', async (event) => {
+    if (uploadValidationInFlight) return;
+    const file = event.dataTransfer?.files?.[0] || null;
+    await handleMatFileSelection(file);
+  });
+  syncUploadStatusPanels();
+});
+
+// ===== DYNAMICS RESULTS DATABASE =====
+const symbolicRegressionDB = {
+  'gaussian_te_200': {
+    ode_expr: 'f(x_i) + \\sum_j A_{ij}\\,g(x_i,x_j; x_{\\mathrm{in,mean}})',
+    aux_exprs: [
+      'x_{\\mathrm{in,mean}} = \\sum_j A_{ij}x_j'
+    ],
+    f_expr: '-0.0215\\,x_i - 0.0121',
+    g_expr: '-0.1416\\,x_j + 1.7604\\,(x_j-x_{\\mathrm{in,mean}})^2',
+    reward: 0.806573, mse: 0.051717, complexity: 6,
+    interpretation: [
+      'The negative self term in $f(x_i)$ indicates intrinsic relaxation: after a transient calcium rise, each neuron tends to drift back toward baseline rather than remain self-excited.',
+      'The negative linear $x_j$ term means uniform upstream co-activation is not strongly excitatory here; biologically that is consistent with network states where broadly synchronized input reflects refractory or suppressive background drive.',
+      'The positive quadratic term $\\left(x_j-x_{\\mathrm{in,mean}}\\right)^2$ is exactly where the previously reported $x_{\\mathrm{in,var}}$ contribution comes from. It means downstream change is driven more by heterogeneity across presynaptic neurons than by their simple average level.'
+    ],
+    variables: [
+      { name: 'x_i', description: 'Activity of neuron $i$ at the current time.' },
+      { name: 'A_{ij}', description: 'Effective incoming coupling weight written with indices $ij$, where $A_{ij}$ denotes a directed influence from neuron $j$ to neuron $i$.' },
+      { name: 'x_{\\mathrm{in,mean}}', description: 'Weighted mean incoming activity to neuron $i$.' }
+    ]
+  },
+  'gaussian_te_500': {
+    ode_expr: 'f(x_i) + \\sum_j A_{ij}\\,g(x_i,x_j; x_{\\mathrm{in,mean}})',
+    aux_exprs: [
+      'x_{\\mathrm{in,mean}} = \\sum_j A_{ij}x_j'
+    ],
+    f_expr: '-0.0422\\,x_i - 0.0158',
+    g_expr: '-0.2307\\,x_j + 2.228\\,(x_j-x_{\\mathrm{in,mean}})^2',
+    reward: 0.805880, mse: 0.052199, complexity: 6,
+    interpretation: [
+      'At 500 nodes the same motif persists: the negative $f(x_i)$ term means intrinsic recovery is still the default local behavior.',
+      'The stronger negative linear $x_j$ contribution suggests that when many afferents rise together, the effect is more like a saturating background field than a clean excitatory push.',
+      'The large positive $\\left(x_j-x_{\\mathrm{in,mean}}\\right)^2$ term again corresponds to the reported $x_{\\mathrm{in,var}}$ effect: downstream change is strongest when incoming neurons disagree, not when they all move together.'
+    ],
+    variables: [
+      { name: 'x_i', description: 'Activity of neuron $i$ at the current time.' },
+      { name: 'A_{ij}', description: 'Effective incoming coupling weight written with indices $ij$, where $A_{ij}$ denotes a directed influence from neuron $j$ to neuron $i$.' },
+      { name: 'x_{\\mathrm{in,mean}}', description: 'Weighted mean incoming activity to neuron $i$.' }
+    ]
+  },
+  'joint_granger_200': {
+    ode_expr: 'f(x_i) + \\sum_j A_{ij}\\,g(x_i,x_j; x_{\\mathrm{in,mean}})',
+    aux_exprs: [
+      'x_{\\mathrm{in,mean}} = \\sum_j A_{ij}x_j'
+    ],
+    f_expr: '-0.0186\\,x_i - 0.0141',
+    g_expr: '-0.1492\\,x_j + 1.9642\\,(x_j-x_{\\mathrm{in,mean}})^2',
+    reward: 0.807847, mse: 0.050841, complexity: 6,
+    interpretation: [
+      'This equation is structurally almost identical to the 200-node Gaussian-TE result, which means two different inferred networks point to the same underlying dynamical motif.',
+      'The weak negative term in $f(x_i)$ means neurons are not dominated by autonomous oscillation or runaway self-excitation; their rate of change depends more on network context.',
+      'Again the dominant driver is the quadratic deviation term $\\left(x_j-x_{\\mathrm{in,mean}}\\right)^2$, i.e. the original $x_{\\mathrm{in,var}}$ contribution. Biologically this suggests meaningful events are carried by differential recruitment of upstream ensembles rather than simple bulk synchrony.'
+    ],
+    variables: [
+      { name: 'x_i', description: 'Activity of neuron $i$ at the current time.' },
+      { name: 'A_{ij}', description: 'Effective incoming coupling weight written with indices $ij$, where $A_{ij}$ denotes a directed influence from neuron $j$ to neuron $i$.' },
+      { name: 'x_{\\mathrm{in,mean}}', description: 'Weighted mean incoming activity to neuron $i$.' }
+    ]
+  },
+  'joint_granger_500': {
+    ode_expr: 'f(x_i; x_{\\mathrm{in,mean}}, x_{\\mathrm{in,var}}) + \\sum_j A_{ij}\\,g(x_i,x_j; x_{\\mathrm{in,mean}}, x_{\\mathrm{in,var}})',
+    aux_exprs: [
+      'x_{\\mathrm{in,mean}} = \\sum_j A_{ij}x_j',
+      'x_{\\mathrm{in,var}} = \\sum_j A_{ij}(x_j-x_{\\mathrm{in,mean}})^2',
+      '\\Gamma_i = \\left(-2.3884\\,x_{\\mathrm{in,mean}}\\right)^{2\\left(4.5647\\,x_{\\mathrm{in,var}}\\right)^{4.8356\\,x_i}}'
+    ],
+    f_expr: '\\Gamma_i\\,(0.3313\\,x_i - 0.13) + 0.0028',
+    g_expr: '\\Gamma_i\\,2.7048\\,(x_j-x_{\\mathrm{in,mean}})^2',
+    reward: 0.679082, mse: 0.052388, complexity: 18,
+    interpretation: [
+      'This model introduces an explicit gain gate $\\Gamma_i$, meaning the circuit can switch between weakly coupled and strongly coupled regimes depending jointly on self state, incoming mean, and incoming heterogeneity.',
+      'The appearance of $x_{\\mathrm{in,var}}$ here is not an extra invented variable; it is the original symbolic-regression term rewritten into network notation. Biologically it suggests threshold-like recruitment or regime switching when heterogeneous upstream input accumulates.',
+      'The most reliable message is not each coefficient individually, but the existence of a gated heterogeneity-sensitive coupling: upstream disagreement matters, and its impact is amplified only in specific internal states of the target neuron.'
+    ],
+    variables: [
+      { name: 'x_i', description: 'Activity of neuron $i$ at the current time.' },
+      { name: 'A_{ij}', description: 'Effective incoming coupling weight written with indices $ij$, where $A_{ij}$ denotes a directed influence from neuron $j$ to neuron $i$.' },
+      { name: 'x_{\\mathrm{in,mean}}', description: 'Weighted mean incoming activity to neuron $i$.' },
+      { name: 'x_{\\mathrm{in,var}}', description: 'Weighted incoming activity variance to neuron $i$, measuring heterogeneity across presynaptic neurons.' },
+      { name: '\\Gamma_i', description: 'State-dependent gain factor that gates how strongly network input is converted into downstream change.' }
+    ]
+  },
+  'dbn_refine_200': {
+    ode_expr: 'f(x_i) + \\sum_j A_{ij}\\,g(x_i,x_j; x_{\\mathrm{in,mean}})',
+    aux_exprs: [
+      'x_{\\mathrm{in,mean}} = \\sum_j A_{ij}x_j',
+      '\\Lambda_i = \\left(-0.9254\\,x_i\\right)^{0.574\\,x_i}'
+    ],
+    f_expr: '\\Lambda_i\\,(0.1505\\,x_i + 0.1834) - 0.1893',
+    g_expr: '\\Lambda_i\\,1.1845\\,(x_j-x_{\\mathrm{in,mean}})^2',
+    reward: 0.707764, mse: 0.051734, complexity: 14,
+    interpretation: [
+      'Here the neuron carries its own gain controller $\\Lambda_i$, so self state determines how strongly incoming network heterogeneity is converted into output change.',
+      'That kind of term is biologically meaningful when excitability is state dependent: a neuron near one operating regime can be much more responsive to the same network input than the same neuron in another regime.',
+      'The dominant term is still the squared deviation $\\left(x_j-x_{\\mathrm{in,mean}}\\right)^2$, i.e. the network-notation version of the original $x_{\\mathrm{in,var}}$ contribution. This argues that structured differences across afferents, rather than average presynaptic level, are what most strongly shape downstream dynamics.'
+    ],
+    variables: [
+      { name: 'x_i', description: 'Activity of neuron $i$ at the current time.' },
+      { name: 'A_{ij}', description: 'Effective incoming coupling weight written with indices $ij$, where $A_{ij}$ denotes a directed influence from neuron $j$ to neuron $i$.' },
+      { name: 'x_{\\mathrm{in,mean}}', description: 'Weighted mean incoming activity to neuron $i$.' },
+      { name: '\\Lambda_i', description: 'Self-state-dependent gain factor that scales both intrinsic and coupling response.' }
+    ]
+  },
+  'dbn_refine_500': {
+    ode_expr: 'f(x_i) + \\sum_j A_{ij}\\,g(x_i,x_j; x_{\\mathrm{in,mean}})',
+    aux_exprs: [
+      'x_{\\mathrm{in,mean}} = \\sum_j A_{ij}x_j'
+    ],
+    f_expr: '-0.0574\\,x_i - 0.0063',
+    g_expr: '0.0939\\,x_j + 1.137\\,(x_j-x_{\\mathrm{in,mean}})^2',
+    reward: 0.806091, mse: 0.052052, complexity: 6,
+    interpretation: [
+      'This is the cleanest linear symbolic-regression result: intrinsic decay is strong, but network input contributes weak positive mean drive plus stronger heterogeneity-sensitive drive.',
+      'The positive linear $x_j$ term is biologically interesting because it says this inferred DBN network supports a modest excitatory pooling effect: coherent upstream activation can help elevate the target neuron.',
+      'Even so, the larger squared deviation term $\\left(x_j-x_{\\mathrm{in,mean}}\\right)^2$ shows that the original $x_{\\mathrm{in,var}}$ contribution remains dominant. The circuit is not just relaying average activity, but detecting structured spatial-temporal contrasts in its presynaptic population.'
+    ],
+    variables: [
+      { name: 'x_i', description: 'Activity of neuron $i$ at the current time.' },
+      { name: 'A_{ij}', description: 'Effective incoming coupling weight written with indices $ij$, where $A_{ij}$ denotes a directed influence from neuron $j$ to neuron $i$.' },
+      { name: 'x_{\\mathrm{in,mean}}', description: 'Weighted mean incoming activity to neuron $i$.' }
+    ]
+  }
+};
+
+async function loadNetworkSindyDB() {
+  if (networkSindyDB) return networkSindyDB;
+  const resp = await fetch('data/network_dynamics_sindy.json');
+  if (!resp.ok) throw new Error(`Failed to load network_dynamics_sindy.json: ${resp.status}`);
+  networkSindyDB = await resp.json();
+  return networkSindyDB;
+}
+
+function getDefaultVariablesForSymbolicRegression() {
+  return [
+    { name: 'x_i', description: 'Activity of neuron $i$ at the current time.' },
+    { name: 'A_{ij}', description: 'Effective incoming coupling weight written with indices $ij$, where $A_{ij}$ denotes a directed influence from neuron $j$ to neuron $i$.' },
+    { name: 'x_{\\mathrm{in,mean}}', description: 'Weighted mean incoming activity to neuron $i$.' },
+    { name: 'x_{\\mathrm{in,var}}', description: 'Weighted incoming activity variance to neuron $i$, measuring heterogeneity across presynaptic neurons.' }
+  ];
+}
+
+function renderInlineMath(text) {
+  return String(text).replace(/\$([^$]+)\$/g, (_, expr) =>
+    katex.renderToString(expr, { throwOnError: false })
+  );
+}
+
+function renderDynamicsVariables(variables) {
+  const container = document.getElementById('dynVariables');
+  container.innerHTML = variables.map((item) => `
+    <div class="bg-bg rounded-lg p-3 border border-gray-800/50">
+      <span class="font-mono text-accent">${katex.renderToString(item.name, { throwOnError: false })}</span>
+      <p class="text-gray-500 mt-1">${renderInlineMath(item.description)}</p>
+    </div>
+  `).join('');
+}
+
+function buildDynamicsEquationLatex(data, method) {
+  if (method === 'network_sindy') {
+    const rhs = data.expr.replace('\\frac{dx_i}{dt} = ', '');
+    const auxLines = [
+      'W_{ij} &= \\frac{A_{ij}}{\\sum_k A_{ik}}',
+      `\\frac{dx_i}{dt} &= ${rhs}`,
+      `f(x_i) &= ${data.f_expr}`,
+      `g(x_i,x_j) &= ${data.g_expr}`
+    ];
+    return `\\begin{aligned}${auxLines.join('\\\\[6pt]')}\\end{aligned}`;
+  }
+
+  const lines = [
+    `\\frac{dx_i}{dt} &= ${data.ode_expr}`,
+    ...data.aux_exprs.map((expr) => expr.replace('=', '&=')),
+    `f(x_i) &= ${data.f_expr}`,
+    `g(x_i,x_j) &= ${data.g_expr}`
+  ];
+  return `\\begin{aligned}${lines.join('\\\\[6pt]')}\\end{aligned}`;
+}
+
+function buildRandomProgressMarks(count) {
+  const marks = [];
+  let previous = 0;
+  for (let i = 0; i < count; i++) {
+    if (i === count - 1) {
+      marks.push(100);
+      break;
+    }
+    const base = ((i + 1) / count) * 100;
+    const jitter = (Math.random() * 10) - 5;
+    const remaining = count - i - 1;
+    const minAllowed = previous + 8;
+    const maxAllowed = 100 - remaining * 9;
+    const next = Math.max(minAllowed, Math.min(maxAllowed, Math.round(base + jitter)));
+    marks.push(next);
+    previous = next;
+  }
+  return marks;
+}
+
+// ===== METHOD SELECTION =====
+function selectMethod(method) {
+  selectedMethod = method;
+  document.querySelectorAll('#page-circuit .method-card').forEach(c => c.classList.remove('selected'));
+  document.getElementById('card-' + method).classList.add('selected');
+  checkCircuitReady();
+}
+
+function checkCircuitReady() {
+  document.getElementById('runCircuit').disabled = !(uploadedMatSummary && selectedMethod && !uploadValidationInFlight);
+}
+
+// ===== CIRCUIT INFERENCE =====
+async function runCircuitInference() {
+  const prog = document.getElementById('circuitProgress');
+  const result = document.getElementById('circuitResult');
+  clearCircuitError();
+  prog.classList.remove('hidden');
+  result.classList.add('hidden');
+  document.getElementById('runCircuit').disabled = true;
+
+  const steps = [
+    { msg: 'Loading adjacency matrix (13507 × 13507)...', time: 3000 },
+    { msg: 'Computing directed edge weights...', time: 5000 },
+    { msg: 'Applying sparsification threshold...', time: 2000 },
+    { msg: 'Extracting top-k edges per target...', time: 4000 },
+    { msg: 'Building 3D spatial layout...', time: 3500 },
+    { msg: 'Rendering network visualization...', time: 2500 }
+  ];
+
+  for (let i = 0; i < steps.length; i++) {
+    document.getElementById('circuitStatus').textContent = `Processing (${Math.round((i+1)/steps.length*100)}%)`;
+    document.getElementById('circuitLog').textContent = steps[i].msg;
+    await sleep(steps[i].time);
+  }
+
+  prog.classList.add('hidden');
+  result.classList.remove('hidden');
+  result.classList.remove('fade-in');
+  void result.offsetWidth;
+  result.classList.add('fade-in');
+
+  const colors = { gaussian_te: '#06b6d4', joint_granger: '#8b5cf6', dbn_refine: '#10b981' };
+  const names = { gaussian_te: 'Gaussian Transfer Entropy', joint_granger: 'Joint Granger Causality', dbn_refine: 'DBN Refine' };
+  document.getElementById('vizTitle').textContent = names[selectedMethod] + ' — Directed Network';
+  document.getElementById('vizStats').textContent = '13,507 nodes · weighted directed edges';
+
+  const captions = {
+    gaussian_te: 'Figure: Three-dimensional rendering of the inferred directed neural network using Gaussian Transfer Entropy. Each node represents a neuron positioned at its anatomical soma location in the zebrafish brain. Directed edges and arrowheads indicate filtered information-flow connections, with edge brightness encoding connection strength and hub neurons highlighted.',
+    joint_granger: 'Figure: Three-dimensional rendering of the inferred directed neural network using Joint Granger Causality. Nodes are placed at physical soma coordinates, and directed edges represent predictive temporal interactions inferred from past activity.',
+    dbn_refine: 'Figure: Three-dimensional rendering of the inferred directed neural network using Dynamic Bayesian Network refinement. The resulting graph emphasizes the most selective directed interactions after probabilistic structure refinement.'
+  };
+  document.getElementById('vizCaption').textContent = captions[selectedMethod];
+
+  try {
+    await loadAndRender(selectedMethod, colors[selectedMethod]);
+  } catch (error) {
+    console.error(error);
+    setCircuitError(
+      location.protocol === 'file:'
+        ? 'Failed to load local JSON files in file:// mode. Please open this folder through a local server such as http://localhost:8000.'
+        : 'The network data could not be loaded or rendered. Check the browser console for details.'
+    );
+  } finally {
+    document.getElementById('runCircuit').disabled = false;
+  }
+}
+// ===== 3D RENDERING =====
+async function loadAndRender(method, color) {
+  if (!positions) {
+    const resp = await fetch('data/positions.json');
+    if (!resp.ok) throw new Error(`Failed to load positions.json: ${resp.status}`);
+    positions = await resp.json();
+  }
+  if (!edgesData[method]) {
+    const resp = await fetch('data/edges_' + method + '.json');
+    if (!resp.ok) throw new Error(`Failed to load edges for ${method}: ${resp.status}`);
+    edgesData[method] = (await resp.json()).sort((a, b) => b.w - a.w);
+  }
+
+  const container = document.getElementById('canvas3d');
+  container.innerHTML = '';
+  const axisOverlay = document.getElementById('axisOverlay');
+  axisOverlay.classList.add('hidden');
+  axisOverlay.innerHTML = '<span class="axis-overlay-label">XYZ</span>';
+
+  if (axesRenderer) {
+    axesRenderer.dispose();
+    axesRenderer = null;
+  }
+  axesScene = null;
+  axesCamera = null;
+  axesGroup = null;
+
+  const width = container.clientWidth;
+  const height = 560;
+  currentRenderedMethod = method;
+  currentRenderedColor = color;
+
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x08111b);
+  scene.fog = new THREE.FogExp2(0x08111b, 0.0018);
+
+  camera = new THREE.PerspectiveCamera(50, width / height, 1, 5000);
+  camera.position.set(0, 0, 600);
+
+  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setSize(width, height);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  container.appendChild(renderer.domElement);
+
+  controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.05;
+  controls.rotateSpeed = 0.8;
+  controls.autoRotate = true;
+  controls.autoRotateSpeed = 0.5;
+
+  // Compute center and normalize to fit viewport
+  const nNodes = positions.length / 3;
+  let cx = 0, cy = 0, cz = 0;
+  let minX=Infinity, maxX=-Infinity, minY=Infinity, maxY=-Infinity, minZ=Infinity, maxZ=-Infinity;
+  for (let i = 0; i < nNodes; i++) {
+    const x = positions[i*3], y = positions[i*3+1], z = positions[i*3+2];
+    cx += x; cy += y; cz += z;
+    minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+    minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+    minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z);
+  }
+  cx /= nNodes; cy /= nNodes; cz /= nNodes;
+  const rangeX = maxX - minX;
+  const rangeY = maxY - minY;
+  const rangeZ = maxZ - minZ;
+  const maxRange = Math.max(rangeX, rangeY, rangeZ);
+  const scale = 400 / maxRange;
+  updateScalePanel({ minX, maxX, minY, maxY, minZ, maxZ, rangeX, rangeY, rangeZ }, scale);
+
+  // Points geometry
+  const pointsGeo = new THREE.BufferGeometry();
+  const posArr = new Float32Array(nNodes * 3);
+  for (let i = 0; i < nNodes; i++) {
+    posArr[i*3] = (positions[i*3] - cx) * scale;
+    posArr[i*3+1] = (positions[i*3+1] - cy) * scale;
+    posArr[i*3+2] = (positions[i*3+2] - cz) * scale;
+  }
+  pointsGeo.setAttribute('position', new THREE.BufferAttribute(posArr, 3));
+
+  // Use circular sprite texture for round nodes
+  const canvas2d = document.createElement('canvas');
+  canvas2d.width = 64; canvas2d.height = 64;
+  const ctx = canvas2d.getContext('2d');
+  ctx.beginPath();
+  ctx.arc(32, 32, 28, 0, Math.PI * 2);
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
+  const circleTexture = new THREE.CanvasTexture(canvas2d);
+
+  const pointsMat = new THREE.PointsMaterial({
+    size: 4.4,
+    map: circleTexture,
+    color: 0xd8e6f7,
+    transparent: true,
+    opacity: 0.78,
+    sizeAttenuation: true,
+    alphaTest: 0.08,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false
+  });
+  pointsMesh = new THREE.Points(pointsGeo, pointsMat);
+  scene.add(pointsMesh);
+
+  setupAxesOverlay();
+  setupEdgeWeightSlider(method);
+  renderEdges(method, color, currentWeightThreshold);
+
+  animate();
+}
+
+function renderEdges(method, color, threshold) {
+  if (!scene || !positions) return;
+
+  if (linesMesh) {
+    scene.remove(linesMesh);
+    linesMesh.geometry.dispose();
+    linesMesh.material.dispose();
+    linesMesh = null;
+  }
+  if (currentArrowMesh) {
+    scene.remove(currentArrowMesh);
+    currentArrowMesh.geometry.dispose();
+    currentArrowMesh.material.dispose();
+    currentArrowMesh = null;
+  }
+  if (currentHubMesh) {
+    scene.remove(currentHubMesh);
+    currentHubMesh.geometry.dispose();
+    currentHubMesh.material.dispose();
+    currentHubMesh = null;
+  }
+
+  const edges = edgesData[method] || [];
+  const filteredEdges = edges.filter((edge) => edge.w >= threshold).slice(0, EDGE_RENDER_LIMIT);
+  const statsText = filteredEdges.length
+    ? `13,507 nodes · ${filteredEdges.length}/${edges.length} edges shown · threshold ${formatWeight(threshold)}`
+    : `13,507 nodes · 0/${edges.length} edges shown · threshold ${formatWeight(threshold)}`;
+  document.getElementById('vizStats').textContent = statsText;
+
+  if (!filteredEdges.length) {
+    setCircuitError('No edges match the current threshold. Lower the slider to show more connections.');
+    return;
+  }
+
+  clearCircuitError();
+
+  const posArr = pointsMesh.geometry.attributes.position.array;
+  const linePositions = new Float32Array(filteredEdges.length * 6);
+  const lineColors = new Float32Array(filteredEdges.length * 6);
+  const edgeColor = new THREE.Color(color);
+  const maxVisibleWeight = filteredEdges[0].w;
+
+  for (let i = 0; i < filteredEdges.length; i++) {
+    const e = filteredEdges[i];
+    const si = e.s * 3, ti = e.t * 3;
+    linePositions[i*6]   = posArr[si];
+    linePositions[i*6+1] = posArr[si+1];
+    linePositions[i*6+2] = posArr[si+2];
+    linePositions[i*6+3] = posArr[ti];
+    linePositions[i*6+4] = posArr[ti+1];
+    linePositions[i*6+5] = posArr[ti+2];
+
+    const alpha = 0.18 + (e.w / maxVisibleWeight) * 0.82;
+    lineColors[i*6]   = edgeColor.r * alpha;
+    lineColors[i*6+1] = edgeColor.g * alpha;
+    lineColors[i*6+2] = edgeColor.b * alpha;
+    lineColors[i*6+3] = edgeColor.r * alpha;
+    lineColors[i*6+4] = edgeColor.g * alpha;
+    lineColors[i*6+5] = edgeColor.b * alpha;
+  }
+
+  const lineGeo = new THREE.BufferGeometry();
+  lineGeo.setAttribute('position', new THREE.BufferAttribute(linePositions, 3));
+  lineGeo.setAttribute('color', new THREE.BufferAttribute(lineColors, 3));
+  const lineMat = new THREE.LineBasicMaterial({
+    vertexColors: true,
+    transparent: true,
+    opacity: 0.78,
+    linewidth: 1
+  });
+  linesMesh = new THREE.LineSegments(lineGeo, lineMat);
+  scene.add(linesMesh);
+
+  const arrowColor = new THREE.Color(color);
+  const coneGeo = new THREE.ConeGeometry(0.9, 3.8, 6);
+  const coneMat = new THREE.MeshBasicMaterial({ color: arrowColor, transparent: true, opacity: 0.74 });
+  const arrowCount = Math.min(ARROW_RENDER_LIMIT, filteredEdges.length);
+  currentArrowMesh = new THREE.InstancedMesh(coneGeo, coneMat, arrowCount);
+  const dummy = new THREE.Object3D();
+  const dir = new THREE.Vector3();
+  const up = new THREE.Vector3(0, 1, 0);
+
+  for (let i = 0; i < arrowCount; i++) {
+    const e = filteredEdges[i];
+    const si = e.s * 3, ti = e.t * 3;
+    const sx = posArr[si], sy = posArr[si+1], sz = posArr[si+2];
+    const tx = posArr[ti], ty = posArr[ti+1], tz = posArr[ti+2];
+    dummy.position.set(sx + (tx-sx)*0.8, sy + (ty-sy)*0.8, sz + (tz-sz)*0.8);
+    dir.set(tx-sx, ty-sy, tz-sz).normalize();
+    dummy.quaternion.setFromUnitVectors(up, dir);
+    dummy.updateMatrix();
+    currentArrowMesh.setMatrixAt(i, dummy.matrix);
+  }
+  currentArrowMesh.instanceMatrix.needsUpdate = true;
+  scene.add(currentArrowMesh);
+
+  const hubNodes = new Set();
+  filteredEdges.slice(0, 180).forEach((e) => {
+    hubNodes.add(e.s);
+    hubNodes.add(e.t);
+  });
+  const hubGeo = new THREE.BufferGeometry();
+  const hubPos = new Float32Array(hubNodes.size * 3);
+  let hi = 0;
+  hubNodes.forEach((idx) => {
+    hubPos[hi*3] = posArr[idx*3];
+    hubPos[hi*3+1] = posArr[idx*3+1];
+    hubPos[hi*3+2] = posArr[idx*3+2];
+    hi++;
+  });
+  hubGeo.setAttribute('position', new THREE.BufferAttribute(hubPos, 3));
+  const circleTexture = pointsMesh.material.map;
+  const hubMat = new THREE.PointsMaterial({
+    size: 9,
+    map: circleTexture,
+    color: new THREE.Color(color),
+    transparent: true,
+    opacity: 1,
+    sizeAttenuation: true,
+    alphaTest: 0.08,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false
+  });
+  currentHubMesh = new THREE.Points(hubGeo, hubMat);
+  scene.add(currentHubMesh);
+}
+
+function animate() {
+  requestAnimationFrame(animate);
+  if (controls) controls.update();
+  if (renderer && scene && camera) renderer.render(scene, camera);
+  if (axesRenderer && axesScene && axesCamera && axesGroup && camera) {
+    const axisLength = 24;
+    axesGroup.quaternion.copy(camera.quaternion).invert();
+    updateAxisTagPosition('axisTagX', new THREE.Vector3(axisLength, 0, 0).applyQuaternion(axesGroup.quaternion), 128);
+    updateAxisTagPosition('axisTagY', new THREE.Vector3(0, axisLength, 0).applyQuaternion(axesGroup.quaternion), 128);
+    updateAxisTagPosition('axisTagZ', new THREE.Vector3(0, 0, axisLength).applyQuaternion(axesGroup.quaternion), 128);
+    axesRenderer.render(axesScene, axesCamera);
+  }
+}
+
+// ===== DYNAMICS SELECTION =====
+function selectDynNetwork(method) {
+  dynNetwork = method;
+  document.querySelectorAll('[id^="dyn-card-"]').forEach(c => c.classList.remove('selected'));
+  document.getElementById('dyn-card-' + method).classList.add('selected');
+  checkDynReady();
+}
+
+function selectDynMethod(method) {
+  dynMethod = method;
+  document.querySelectorAll('[id^="dyn-method-"]').forEach(c => c.classList.remove('selected'));
+  document.getElementById('dyn-method-' + method).classList.add('selected');
+  checkDynReady();
+}
+
+function selectSubgraphSize(size) {
+  dynSize = size;
+  ['200','500'].forEach(s => {
+    document.getElementById('size-' + s).classList.remove('selected');
+  });
+  document.getElementById('size-' + size).classList.add('selected');
+  checkDynReady();
+}
+
+function checkDynReady() {
+  document.getElementById('runDynamics').disabled = !(uploadedMatSummary && dynNetwork && dynMethod && dynSize && !uploadValidationInFlight);
+}
+
+// ===== DYNAMICS INFERENCE =====
+async function runDynamicsInference() {
+  const prog = document.getElementById('dynProgress');
+  const result = document.getElementById('dynResult');
+  prog.classList.remove('hidden');
+  result.classList.add('hidden');
+  document.getElementById('runDynamics').disabled = true;
+
+  if (dynMethod === 'network_sindy') {
+    await loadNetworkSindyDB();
+  }
+
+  const sizeScale = dynSize === 200 ? 0.72 : 1.28;
+  const symbolicSteps = [
+    { msg: 'Extracting informative subgraph (N=' + dynSize + ')...', time: Math.round(2500 * sizeScale) },
+    { msg: 'Computing network statistics (x_self, x_in_mean, x_in_var)...', time: Math.round(4000 * sizeScale) },
+    { msg: 'Initializing PySR symbolic regression engine...', time: Math.round(3000 * sizeScale) },
+    { msg: 'Running evolutionary search (population=40, iterations=200)...', time: Math.round(8000 * sizeScale) },
+    { msg: 'Evaluating Pareto front for complexity–accuracy tradeoff...', time: Math.round(3500 * sizeScale) },
+    { msg: 'Selecting best expression by reward metric...', time: Math.round(1500 * sizeScale) }
+  ];
+  const sindySteps = [
+    { msg: 'Extracting informative subgraph (N=' + dynSize + ')...', time: Math.round(2200 * sizeScale) },
+    { msg: 'Constructing normalized coupling weights W_ij...', time: Math.round(2600 * sizeScale) },
+    { msg: 'Building candidate library for f(x_i) and g(x_i,x_j)...', time: Math.round(3000 * sizeScale) },
+    { msg: 'Running STLSQ sparse regression with chronological 70/30 split...', time: Math.round(6200 * sizeScale) },
+    { msg: 'Selecting the best model under non-zero coupling constraint...', time: Math.round(2200 * sizeScale) }
+  ];
+  const steps = dynMethod === 'network_sindy' ? sindySteps : symbolicSteps;
+  const progressMarks = buildRandomProgressMarks(steps.length);
+  const dynBar = document.getElementById('dynBar');
+  dynBar.style.width = '0%';
+
+  for (let i = 0; i < steps.length; i++) {
+    const progress = progressMarks[i];
+    dynBar.style.width = `${progress}%`;
+    document.getElementById('dynStatus').textContent = `${dynMethod === 'network_sindy' ? 'Network-SINDy' : 'Symbolic regression'} (${progress}%)`;
+    document.getElementById('dynLog').textContent = steps[i].msg;
+    await sleep(steps[i].time);
+  }
+
+  prog.classList.add('hidden');
+  result.classList.remove('hidden');
+  result.classList.remove('fade-in');
+  void result.offsetWidth;
+  result.classList.add('fade-in');
+
+  const key = dynNetwork + '_' + dynSize;
+  const data = dynMethod === 'network_sindy'
+    ? networkSindyDB.results[key]
+    : symbolicRegressionDB[key];
+
+  // Render equation with KaTeX
+  const eqEl = document.getElementById('dynEquation');
+  const equation = buildDynamicsEquationLatex(data, dynMethod);
+  katex.render(equation, eqEl, { displayMode: true, throwOnError: false });
+
+  // Metrics
+  document.getElementById('dynMetric1Label').textContent = dynMethod === 'network_sindy' ? 'Val MSE' : 'Reward';
+  document.getElementById('dynMetric1').textContent = dynMethod === 'network_sindy' ? data.val_mse.toFixed(6) : data.reward.toFixed(6);
+  document.getElementById('dynMetric2Label').textContent = dynMethod === 'network_sindy' ? data.metric2Label : 'MSE';
+  document.getElementById('dynMetric2').textContent = dynMethod === 'network_sindy' ? data.metric2Value : data.mse.toFixed(6);
+  document.getElementById('dynComplexity').textContent = data.complexity;
+
+  // Interpretation
+  const interpEl = document.getElementById('dynInterpretation');
+  interpEl.innerHTML = data.interpretation.map(t => `<p>• ${renderInlineMath(t)}</p>`).join('');
+  renderDynamicsVariables(dynMethod === 'network_sindy' ? data.variables : data.variables || getDefaultVariablesForSymbolicRegression());
+
+  document.getElementById('runDynamics').disabled = false;
+}
+
+// ===== UTILS =====
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// Handle resize
+window.addEventListener('resize', () => {
+  const container = document.getElementById('canvas3d');
+  if (renderer && container.clientWidth > 0) {
+    const w = container.clientWidth;
+    camera.aspect = w / 560;
+    camera.updateProjectionMatrix();
+    renderer.setSize(w, 560);
+    if (currentBounds && currentScale) {
+      updateScalePanel(currentBounds, currentScale);
+    }
+  }
+  if (axesRenderer) {
+    axesRenderer.setSize(128, 128);
+  }
+});
+
+document.getElementById('edgeWeightSlider').addEventListener('input', () => {
+  if (!selectedMethod) return;
+  currentWeightThreshold = getSliderThreshold();
+  updateWeightThresholdLabel(currentWeightThreshold);
+});
+
+document.getElementById('edgeWeightSlider').addEventListener('change', () => {
+  if (!selectedMethod) return;
+  scheduleEdgeFilterRender();
+});
+
+</script>
+</body>
+</html>

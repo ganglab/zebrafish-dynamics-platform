@@ -1,0 +1,127 @@
+{
+  "method": "network_sindy",
+  "label": "Network-SINDy",
+  "description": "Sparse network dynamics identification with explicit self term f(x_i) and coupling kernel g(x_i,x_j), evaluated with chronological 70/30 train-validation split. STLSQ is the sparse thresholded least-squares solver used internally.",
+  "results": {
+    "dbn_refine_200": {
+      "expr": "\\frac{dx_i}{dt} = f(x_i) + \\sum_j W_{ij}\\,g(x_i,x_j)",
+      "f_expr": "-39.212\\,x_i + 3.108\\,x_i^2 + 9.874\\,x_i^3 + 52.447\\sin(x_i) - 6.412(\\cos(x_i)-1) - 3.981\\tanh(x_i) - 9.604(\\exp(x_i)-1)",
+      "g_expr": "1.918\\,(x_j-x_i) - 1.203\\sin(x_j-x_i) + 0.684\\,(x_j-x_i)^2",
+      "val_mse": 0.045203,
+      "complexity": 11,
+      "metric2Label": "Constraint",
+      "metric2Value": "non-zero g required",
+      "interpretation": [
+        "Among the 200-node results, this model reaches the lowest validation error but uses a more involved coupling kernel than the simplest alternatives.",
+        "The coupling term combines linear activity-difference drive with nonlinear correction, suggesting that upstream influence is not purely diffusive.",
+        "Its meaning is that local circuit propagation is still dominated by inter-neuron activity differences, but the effect bends nonlinearly when source and target activity diverge."
+      ],
+      "variables": [
+        { "name": "x_i", "description": "Activity of neuron i at the current time." },
+        { "name": "W_{ij}", "description": "Normalized incoming weight written with indices ij, where W_{ij} denotes a directed influence from neuron j to neuron i." },
+        { "name": "f(x_i)", "description": "Self-dynamics term capturing intrinsic recovery and nonlinear response of neuron i." },
+        { "name": "g(x_i,x_j)", "description": "Pairwise coupling kernel describing how activity difference between neurons j and i drives propagation." }
+      ]
+    },
+    "gaussian_te_200": {
+      "expr": "\\frac{dx_i}{dt} = f(x_i) + \\sum_j W_{ij}\\,g(x_i,x_j)",
+      "f_expr": "-22.744\\,x_i + 2.331\\,x_i^2 + 4.912\\,x_i^3 + 34.118\\sin(x_i) - 6.782\\tanh(x_i) - 3.904(\\exp(x_i)-1)",
+      "g_expr": "-2.417\\,(x_j-x_i) + 1.102\\,x_i(x_j-x_i) + 2.105\\sin(x_j-x_i)",
+      "val_mse": 0.045255,
+      "complexity": 8,
+      "metric2Label": "Constraint",
+      "metric2Value": "non-zero g required",
+      "interpretation": [
+        "This is the most concise 200-node Network-SINDy result and nearly matches the best validation error.",
+        "The interaction kernel contains both a simple activity-difference term and a state-dependent modulation x_i(x_j-x_i), meaning neighbor influence depends on the target neuron's current state.",
+        "Dynamically, this implies signal propagation is not uniform: the same upstream input can have different impact depending on how active the receiving neuron already is."
+      ],
+      "variables": [
+        { "name": "x_i", "description": "Activity of neuron i at the current time." },
+        { "name": "W_{ij}", "description": "Normalized incoming weight written with indices ij, where W_{ij} denotes a directed influence from neuron j to neuron i." },
+        { "name": "f(x_i)", "description": "Self-dynamics term capturing intrinsic recovery and nonlinear response of neuron i." },
+        { "name": "g(x_i,x_j)", "description": "Pairwise coupling kernel describing how activity difference between neurons j and i drives propagation." }
+      ]
+    },
+    "joint_granger_200": {
+      "expr": "\\frac{dx_i}{dt} = f(x_i) + \\sum_j W_{ij}\\,g(x_i,x_j)",
+      "f_expr": "-31.505\\,x_i + 1.884\\,x_i^3 + 41.762\\sin(x_i) + 7.418(\\cos(x_i)-1) - 11.903\\tanh(x_i)",
+      "g_expr": "-6.224\\,(x_j-x_i) + 1.536\\,x_i(x_j-x_i) - 2.142(\\cos(x_j-x_i)-1) + 3.208\\sin(x_j-x_i)",
+      "val_mse": 0.045711,
+      "complexity": 11,
+      "metric2Label": "Constraint",
+      "metric2Value": "non-zero g required",
+      "interpretation": [
+        "This 200-node joint-Granger result is usable, but both error and kernel complexity are slightly less favorable than the Gaussian TE and DBN alternatives.",
+        "Its coupling kernel mixes linear, trigonometric, and state-dependent terms, pointing to a more heterogeneous interaction law.",
+        "The biological reading is that activity transfer is still difference-driven, but the inferred Granger network requires more nonlinear compensation to explain temporal evolution."
+      ],
+      "variables": [
+        { "name": "x_i", "description": "Activity of neuron i at the current time." },
+        { "name": "W_{ij}", "description": "Normalized incoming weight written with indices ij, where W_{ij} denotes a directed influence from neuron j to neuron i." },
+        { "name": "f(x_i)", "description": "Self-dynamics term capturing intrinsic recovery and nonlinear response of neuron i." },
+        { "name": "g(x_i,x_j)", "description": "Pairwise coupling kernel describing how activity difference between neurons j and i drives propagation." }
+      ]
+    },
+    "dbn_refine_500": {
+      "expr": "\\frac{dx_i}{dt} = f(x_i) + \\sum_j W_{ij}\\,g(x_i,x_j)",
+      "f_expr": "-39.7916\\,x_i + 2.78975\\,x_i^2 + 10.2974\\,x_i^3 + 54.6088\\sin(x_i) - 5.61983(\\cos(x_i)-1) - 4.62837\\tanh(x_i) - 10.2309(\\exp(x_i)-1)",
+      "g_expr": "1.62217\\,(x_j-x_i) - 1.4575\\sin(x_j-x_i)",
+      "val_mse": 0.045132,
+      "complexity": 9,
+      "metric2Label": "Constraint",
+      "metric2Value": "non-zero g required",
+      "interpretation": [
+        "This is the strongest Network-SINDy candidate in the document: lowest validation error among the 500-node models and a very compact coupling kernel.",
+        "Its meaning is clear: propagation behaves like diffusive coupling driven by activity differences, plus a sinusoidal nonlinear correction that modulates transfer when phase or activity offset grows.",
+        "Compared with the earlier symbolic-regression results, this formulation more explicitly separates intrinsic neuron dynamics f(x_i) from network-mediated transmission g(x_i,x_j), which makes the circuit-level interpretation cleaner."
+      ],
+      "variables": [
+        { "name": "x_i", "description": "Activity of neuron i at the current time." },
+        { "name": "W_{ij}", "description": "Normalized incoming weight written with indices ij, where W_{ij} denotes a directed influence from neuron j to neuron i." },
+        { "name": "f(x_i)", "description": "Self-dynamics term capturing intrinsic recovery and nonlinear response of neuron i." },
+        { "name": "g(x_i,x_j)", "description": "Pairwise coupling kernel describing how activity difference between neurons j and i drives propagation." }
+      ]
+    },
+    "gaussian_te_500": {
+      "expr": "\\frac{dx_i}{dt} = f(x_i) + \\sum_j W_{ij}\\,g(x_i,x_j)",
+      "f_expr": "-25.9702\\,x_i + 2.8245\\,x_i^2 + 5.20885\\,x_i^3 + 38.6938\\sin(x_i) - 8.89855\\tanh(x_i) - 4.22833(\\exp(x_i)-1)",
+      "g_expr": "-2.93493\\,(x_j-x_i) + 2.3904\\,x_i(x_j-x_i) + 2.71359\\sin(x_j-x_i) - 4.31637(\\cos(x_j-x_i)-1)",
+      "val_mse": 0.045468,
+      "complexity": 10,
+      "metric2Label": "Constraint",
+      "metric2Value": "non-zero g required",
+      "interpretation": [
+        "This model remains interpretable but is less compact than the DBN 500-node result.",
+        "The extra term x_i(x_j-x_i) means coupling is state-dependent: the same incoming difference can amplify or dampen differently depending on the target neuron's current level.",
+        "Its dynamical meaning is that the network may operate in a gated regime where propagation depends on both relative activity and the receiver's internal state."
+      ],
+      "variables": [
+        { "name": "x_i", "description": "Activity of neuron i at the current time." },
+        { "name": "W_{ij}", "description": "Normalized incoming weight written with indices ij, where W_{ij} denotes a directed influence from neuron j to neuron i." },
+        { "name": "f(x_i)", "description": "Self-dynamics term capturing intrinsic recovery and nonlinear response of neuron i." },
+        { "name": "g(x_i,x_j)", "description": "Pairwise coupling kernel describing how activity difference between neurons j and i drives propagation." }
+      ]
+    },
+    "joint_granger_500": {
+      "expr": "\\frac{dx_i}{dt} = f(x_i) + \\sum_j W_{ij}\\,g(x_i,x_j)",
+      "f_expr": "-52.7921\\,x_i + 1.94332\\,x_i^3 + 64.5175\\sin(x_i) + 11.1226(\\cos(x_i)-1) - 24.111\\tanh(x_i) + 11.9027(\\exp(x_i)-1)",
+      "g_expr": "-19.2682\\,(x_j-x_i) + 2.56372\\,x_i(x_j-x_i) - 3.68798\\,(x_j-x_i)^2 + 2.78877\\,(x_j-x_i)^3 + 20.102\\sin(x_j-x_i) - 13.9212(\\cos(x_j-x_i)-1) - 1.1073(\\exp(x_j-x_i)-1)",
+      "val_mse": 0.045275,
+      "complexity": 13,
+      "metric2Label": "Constraint",
+      "metric2Value": "non-zero g required",
+      "interpretation": [
+        "Validation error is competitive with the best 500-node model, but the coupling kernel is much more complex.",
+        "This indicates the joint-Granger structure can also support a low-error network dynamics model, but only by invoking stronger nonlinear corrections and higher-order difference terms.",
+        "The safe interpretation is that activity-difference-driven coupling is still supported, but the exact coefficient-level mechanism is less robust and less suitable as the main reporting formula."
+      ],
+      "variables": [
+        { "name": "x_i", "description": "Activity of neuron i at the current time." },
+        { "name": "W_{ij}", "description": "Normalized incoming weight written with indices ij, where W_{ij} denotes a directed influence from neuron j to neuron i." },
+        { "name": "f(x_i)", "description": "Self-dynamics term capturing intrinsic recovery and nonlinear response of neuron i." },
+        { "name": "g(x_i,x_j)", "description": "Pairwise coupling kernel describing how activity difference between neurons j and i drives propagation." }
+      ]
+    }
+  }
+}
