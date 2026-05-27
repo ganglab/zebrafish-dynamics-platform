@@ -1,0 +1,155 @@
+{
+  "method": "symbolic_regression",
+  "label": "Symbolic Regression",
+  "description": "Compressed-statistics symbolic regression rewritten into the network ODE form dx_i/dt = f(x_i) + sum_j W_ij G(x_i,x_j; m_i, v_i), keeping edge weights explicit to match the notation used in the site.",
+  "results": {
+    "gaussian_te_200": {
+      "expr": "\\frac{dx_i}{dt} = f(x_i) + \\sum_j W_{ij}\\,G(x_i,x_j; m_i)",
+      "aux_exprs": [
+        "W_{ij} = \\frac{A_{ij}}{\\sum_k A_{ik}}",
+        "m_i = \\sum_j W_{ij}x_j"
+      ],
+      "f_expr": "-0.0215\\,x_i - 0.0121",
+      "g_expr": "-0.1416\\,x_j + 1.7604\\,(x_j-m_i)^2",
+      "reward": 0.806573,
+      "mse": 0.051717,
+      "complexity": 6,
+      "interpretation": [
+        "The decomposition separates a simple intrinsic decay term $f(x_i)$ from a weighted network drive $\\sum_j W_{ij}G(x_i,x_j; m_i)$, so the equation reads as local relaxation plus incoming circuit modulation.",
+        "The negative $x_j$ contribution inside $G$ means uniform presynaptic co-activation is not the dominant excitatory mechanism in this model.",
+        "The positive $(x_j-m_i)^2$ term shows that heterogeneous upstream activity, rather than the mean input alone, is the main driver of downstream change."
+      ],
+      "variables": [
+        { "name": "A_{ij}", "description": "Directed edge weight from neuron $j$ to neuron $i$ in the inferred functional network." },
+        { "name": "W_{ij}", "description": "Normalized incoming weight, defined from $A_{ij}$ so that incoming weights to neuron $i$ sum to one." },
+        { "name": "m_i", "description": "Weighted mean incoming activity of neuron $i$." },
+        { "name": "f(x_i)", "description": "Intrinsic self-dynamics term for neuron $i$." },
+        { "name": "G(x_i,x_j; m_i)", "description": "Edge-local network contribution before weighting by $W_{ij}$ in the symbolic-regression rewrite." }
+      ]
+    },
+    "joint_granger_200": {
+      "expr": "\\frac{dx_i}{dt} = f(x_i) + \\sum_j W_{ij}\\,G(x_i,x_j; m_i)",
+      "aux_exprs": [
+        "W_{ij} = \\frac{A_{ij}}{\\sum_k A_{ik}}",
+        "m_i = \\sum_j W_{ij}x_j"
+      ],
+      "f_expr": "-0.0186\\,x_i - 0.0141",
+      "g_expr": "-0.1492\\,x_j + 1.9642\\,(x_j-m_i)^2",
+      "reward": 0.807847,
+      "mse": 0.050841,
+      "complexity": 6,
+      "interpretation": [
+        "This result has the same overall structure as the 200-node Gaussian-TE model: intrinsic decay in $f(x_i)$ plus a heterogeneity-sensitive incoming network term.",
+        "The edge term again down-weights simple bulk co-activation and emphasizes deviations from the local incoming mean $m_i$.",
+        "That consistency across two network families suggests the dominant symbolic-regression signal is not method-specific noise, but a recurring motif of input heterogeneity shaping neural dynamics."
+      ],
+      "variables": [
+        { "name": "A_{ij}", "description": "Directed edge weight from neuron $j$ to neuron $i$ in the inferred functional network." },
+        { "name": "W_{ij}", "description": "Normalized incoming weight, defined from $A_{ij}$ so that incoming weights to neuron $i$ sum to one." },
+        { "name": "m_i", "description": "Weighted mean incoming activity of neuron $i$." },
+        { "name": "f(x_i)", "description": "Intrinsic self-dynamics term for neuron $i$." },
+        { "name": "G(x_i,x_j; m_i)", "description": "Edge-local network contribution before weighting by $W_{ij}$ in the symbolic-regression rewrite." }
+      ]
+    },
+    "dbn_refine_200": {
+      "expr": "\\frac{dx_i}{dt} = f(x_i) + \\sum_j W_{ij}\\,G(x_i,x_j; m_i)",
+      "aux_exprs": [
+        "W_{ij} = \\frac{A_{ij}}{\\sum_k A_{ik}}",
+        "m_i = \\sum_j W_{ij}x_j",
+        "K_i = (-0.9254\\,x_i)^{0.574\\,x_i}"
+      ],
+      "f_expr": "K_i\\,(0.1505\\,x_i + 0.1834) - 0.1893",
+      "g_expr": "K_i\\,1.1845\\,(x_j-m_i)^2",
+      "reward": 0.707764,
+      "mse": 0.051734,
+      "complexity": 14,
+      "interpretation": [
+        "Here the intrinsic term $f(x_i)$ is state dependent through $K_i$, so the receiving neuron's own activity controls how responsive it is before network input is even added.",
+        "The network contribution enters only through the heterogeneity term $(x_j-m_i)^2$, not through a direct linear $x_j$ drive.",
+        "Biologically this suggests a gated regime in which target-neuron excitability and uneven presynaptic recruitment jointly shape propagation."
+      ],
+      "variables": [
+        { "name": "A_{ij}", "description": "Directed edge weight from neuron $j$ to neuron $i$ in the inferred functional network." },
+        { "name": "W_{ij}", "description": "Normalized incoming weight, defined from $A_{ij}$ so that incoming weights to neuron $i$ sum to one." },
+        { "name": "m_i", "description": "Weighted mean incoming activity of neuron $i$." },
+        { "name": "K_i", "description": "Self-state-dependent gain factor appearing in the 200-node DBN-refine symbolic-regression model." },
+        { "name": "G(x_i,x_j; m_i)", "description": "Edge-local network contribution before weighting by $W_{ij}$ in the symbolic-regression rewrite." }
+      ]
+    },
+    "gaussian_te_500": {
+      "expr": "\\frac{dx_i}{dt} = f(x_i) + \\sum_j W_{ij}\\,G(x_i,x_j; m_i)",
+      "aux_exprs": [
+        "W_{ij} = \\frac{A_{ij}}{\\sum_k A_{ik}}",
+        "m_i = \\sum_j W_{ij}x_j"
+      ],
+      "f_expr": "-0.0422\\,x_i - 0.0158",
+      "g_expr": "-0.2307\\,x_j + 2.228\\,(x_j-m_i)^2",
+      "reward": 0.805880,
+      "mse": 0.052199,
+      "complexity": 6,
+      "interpretation": [
+        "At 500 nodes the same decomposition remains valid: a compact intrinsic decay term $f(x_i)$ plus weighted incoming edge contributions.",
+        "The larger coefficient on the heterogeneity term compared with the linear $x_j$ term means unequal presynaptic recruitment is still the dominant factor.",
+        "This supports the view that the symbolic-regression model is responding more to structured upstream contrasts than to simple mean-field excitation."
+      ],
+      "variables": [
+        { "name": "A_{ij}", "description": "Directed edge weight from neuron $j$ to neuron $i$ in the inferred functional network." },
+        { "name": "W_{ij}", "description": "Normalized incoming weight, defined from $A_{ij}$ so that incoming weights to neuron $i$ sum to one." },
+        { "name": "m_i", "description": "Weighted mean incoming activity of neuron $i$." },
+        { "name": "f(x_i)", "description": "Intrinsic self-dynamics term for neuron $i$." },
+        { "name": "G(x_i,x_j; m_i)", "description": "Edge-local network contribution before weighting by $W_{ij}$ in the symbolic-regression rewrite." }
+      ]
+    },
+    "joint_granger_500": {
+      "expr": "\\frac{dx_i}{dt} = f(x_i) + \\sum_j W_{ij}\\,G(x_i,x_j; m_i, v_i)",
+      "aux_exprs": [
+        "W_{ij} = \\frac{A_{ij}}{\\sum_k A_{ik}}",
+        "m_i = \\sum_j W_{ij}x_j",
+        "v_i = \\sum_j W_{ij}(x_j-m_i)^2",
+        "B_i = (-2.3884\\,m_i)^{2\\,(4.5647\\,v_i)^{4.8356\\,x_i}}"
+      ],
+      "f_expr": "0.0028",
+      "g_expr": "B_i\\,(0.3313\\,x_i + 2.7048\\,v_i - 0.13)",
+      "reward": 0.679082,
+      "mse": 0.052388,
+      "complexity": 18,
+      "interpretation": [
+        "This is the least pairwise-like symbolic-regression result: the decomposition into $f(x_i) + \\sum_j W_{ij}G(x_i,x_j; m_i,v_i)$ is algebraically valid, but $G$ still depends on aggregated incoming statistics through $m_i$ and $v_i$.",
+        "Its main message is a regime-switching network effect, where the influence of incoming structure is gated by the target state and by whole-neighborhood statistics.",
+        "For reporting, this model should be described as a network ODE with explicit weights rather than a strict pairwise kernel of the form $W_{ij}g(x_i,x_j)$."
+      ],
+      "variables": [
+        { "name": "A_{ij}", "description": "Directed edge weight from neuron $j$ to neuron $i$ in the inferred functional network." },
+        { "name": "W_{ij}", "description": "Normalized incoming weight, defined from $A_{ij}$ so that incoming weights to neuron $i$ sum to one." },
+        { "name": "m_i", "description": "Weighted mean incoming activity of neuron $i$." },
+        { "name": "v_i", "description": "Weighted incoming activity variance of neuron $i$, measuring heterogeneity across presynaptic neurons." },
+        { "name": "B_i", "description": "State- and network-dependent gain factor introduced by the 500-node joint-Granger symbolic-regression model." },
+        { "name": "G(x_i,x_j; m_i, v_i)", "description": "Network contribution inside the weighted sum; here it depends on aggregated neighborhood statistics and is not a strict pairwise kernel." }
+      ]
+    },
+    "dbn_refine_500": {
+      "expr": "\\frac{dx_i}{dt} = f(x_i) + \\sum_j W_{ij}\\,G(x_i,x_j; m_i)",
+      "aux_exprs": [
+        "W_{ij} = \\frac{A_{ij}}{\\sum_k A_{ik}}",
+        "m_i = \\sum_j W_{ij}x_j"
+      ],
+      "f_expr": "-0.0574\\,x_i - 0.0063",
+      "g_expr": "0.0939\\,x_j + 1.137\\,(x_j-m_i)^2",
+      "reward": 0.806091,
+      "mse": 0.052052,
+      "complexity": 6,
+      "interpretation": [
+        "This is the cleanest 500-node symbolic-regression rewrite: a simple intrinsic decay term plus a weighted network contribution with only two components.",
+        "Unlike the TE and joint-Granger 500-node formulas, it retains a modest positive linear $x_j$ drive, meaning coherent presynaptic activation can still support downstream excitation.",
+        "At the same time, the stronger heterogeneity term shows that structured differences across presynaptic neurons remain the dominant network signature, which is why this model is a strong candidate for concise reporting."
+      ],
+      "variables": [
+        { "name": "A_{ij}", "description": "Directed edge weight from neuron $j$ to neuron $i$ in the inferred functional network." },
+        { "name": "W_{ij}", "description": "Normalized incoming weight, defined from $A_{ij}$ so that incoming weights to neuron $i$ sum to one." },
+        { "name": "m_i", "description": "Weighted mean incoming activity of neuron $i$." },
+        { "name": "f(x_i)", "description": "Intrinsic self-dynamics term for neuron $i$." },
+        { "name": "G(x_i,x_j; m_i)", "description": "Edge-local network contribution before weighting by $W_{ij}$ in the symbolic-regression rewrite." }
+      ]
+    }
+  }
+}
