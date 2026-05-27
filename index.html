@@ -562,6 +562,7 @@ let dynSize = null;
 let positions = null;
 let edgesData = {};
 let networkSindyDB = null;
+let symbolicRegressionDB = null;
 let scene, camera, renderer, controls, pointsMesh, linesMesh;
 let axesScene = null;
 let axesCamera = null;
@@ -1092,130 +1093,6 @@ window.addEventListener('load', () => {
   syncUploadStatusPanels();
 });
 
-// ===== DYNAMICS RESULTS DATABASE =====
-const symbolicRegressionDB = {
-  'gaussian_te_200': {
-    ode_expr: 'f(x_i) + \\sum_j A_{ij}\\,g(x_i,x_j; x_{\\mathrm{in,mean}})',
-    aux_exprs: [
-      'x_{\\mathrm{in,mean}} = \\sum_j A_{ij}x_j'
-    ],
-    f_expr: '-0.0215\\,x_i - 0.0121',
-    g_expr: '-0.1416\\,x_j + 1.7604\\,(x_j-x_{\\mathrm{in,mean}})^2',
-    reward: 0.806573, mse: 0.051717, complexity: 6,
-    interpretation: [
-      'The negative self term in $f(x_i)$ indicates intrinsic relaxation: after a transient calcium rise, each neuron tends to drift back toward baseline rather than remain self-excited.',
-      'The negative linear $x_j$ term means uniform upstream co-activation is not strongly excitatory here; biologically that is consistent with network states where broadly synchronized input reflects refractory or suppressive background drive.',
-      'The positive quadratic term $\\left(x_j-x_{\\mathrm{in,mean}}\\right)^2$ is exactly where the previously reported $x_{\\mathrm{in,var}}$ contribution comes from. It means downstream change is driven more by heterogeneity across presynaptic neurons than by their simple average level.'
-    ],
-    variables: [
-      { name: 'x_i', description: 'Activity of neuron $i$ at the current time.' },
-      { name: 'A_{ij}', description: 'Effective incoming coupling weight written with indices $ij$, where $A_{ij}$ denotes a directed influence from neuron $j$ to neuron $i$.' },
-      { name: 'x_{\\mathrm{in,mean}}', description: 'Weighted mean incoming activity to neuron $i$.' }
-    ]
-  },
-  'gaussian_te_500': {
-    ode_expr: 'f(x_i) + \\sum_j A_{ij}\\,g(x_i,x_j; x_{\\mathrm{in,mean}})',
-    aux_exprs: [
-      'x_{\\mathrm{in,mean}} = \\sum_j A_{ij}x_j'
-    ],
-    f_expr: '-0.0422\\,x_i - 0.0158',
-    g_expr: '-0.2307\\,x_j + 2.228\\,(x_j-x_{\\mathrm{in,mean}})^2',
-    reward: 0.805880, mse: 0.052199, complexity: 6,
-    interpretation: [
-      'At 500 nodes the same motif persists: the negative $f(x_i)$ term means intrinsic recovery is still the default local behavior.',
-      'The stronger negative linear $x_j$ contribution suggests that when many afferents rise together, the effect is more like a saturating background field than a clean excitatory push.',
-      'The large positive $\\left(x_j-x_{\\mathrm{in,mean}}\\right)^2$ term again corresponds to the reported $x_{\\mathrm{in,var}}$ effect: downstream change is strongest when incoming neurons disagree, not when they all move together.'
-    ],
-    variables: [
-      { name: 'x_i', description: 'Activity of neuron $i$ at the current time.' },
-      { name: 'A_{ij}', description: 'Effective incoming coupling weight written with indices $ij$, where $A_{ij}$ denotes a directed influence from neuron $j$ to neuron $i$.' },
-      { name: 'x_{\\mathrm{in,mean}}', description: 'Weighted mean incoming activity to neuron $i$.' }
-    ]
-  },
-  'joint_granger_200': {
-    ode_expr: 'f(x_i) + \\sum_j A_{ij}\\,g(x_i,x_j; x_{\\mathrm{in,mean}})',
-    aux_exprs: [
-      'x_{\\mathrm{in,mean}} = \\sum_j A_{ij}x_j'
-    ],
-    f_expr: '-0.0186\\,x_i - 0.0141',
-    g_expr: '-0.1492\\,x_j + 1.9642\\,(x_j-x_{\\mathrm{in,mean}})^2',
-    reward: 0.807847, mse: 0.050841, complexity: 6,
-    interpretation: [
-      'This equation is structurally almost identical to the 200-node Gaussian-TE result, which means two different inferred networks point to the same underlying dynamical motif.',
-      'The weak negative term in $f(x_i)$ means neurons are not dominated by autonomous oscillation or runaway self-excitation; their rate of change depends more on network context.',
-      'Again the dominant driver is the quadratic deviation term $\\left(x_j-x_{\\mathrm{in,mean}}\\right)^2$, i.e. the original $x_{\\mathrm{in,var}}$ contribution. Biologically this suggests meaningful events are carried by differential recruitment of upstream ensembles rather than simple bulk synchrony.'
-    ],
-    variables: [
-      { name: 'x_i', description: 'Activity of neuron $i$ at the current time.' },
-      { name: 'A_{ij}', description: 'Effective incoming coupling weight written with indices $ij$, where $A_{ij}$ denotes a directed influence from neuron $j$ to neuron $i$.' },
-      { name: 'x_{\\mathrm{in,mean}}', description: 'Weighted mean incoming activity to neuron $i$.' }
-    ]
-  },
-  'joint_granger_500': {
-    ode_expr: 'f(x_i; x_{\\mathrm{in,mean}}, x_{\\mathrm{in,var}}) + \\sum_j A_{ij}\\,g(x_i,x_j; x_{\\mathrm{in,mean}}, x_{\\mathrm{in,var}})',
-    aux_exprs: [
-      'x_{\\mathrm{in,mean}} = \\sum_j A_{ij}x_j',
-      'x_{\\mathrm{in,var}} = \\sum_j A_{ij}(x_j-x_{\\mathrm{in,mean}})^2',
-      '\\Gamma_i = \\left(-2.3884\\,x_{\\mathrm{in,mean}}\\right)^{2\\left(4.5647\\,x_{\\mathrm{in,var}}\\right)^{4.8356\\,x_i}}'
-    ],
-    f_expr: '\\Gamma_i\\,(0.3313\\,x_i - 0.13) + 0.0028',
-    g_expr: '\\Gamma_i\\,2.7048\\,(x_j-x_{\\mathrm{in,mean}})^2',
-    reward: 0.679082, mse: 0.052388, complexity: 18,
-    interpretation: [
-      'This model introduces an explicit gain gate $\\Gamma_i$, meaning the circuit can switch between weakly coupled and strongly coupled regimes depending jointly on self state, incoming mean, and incoming heterogeneity.',
-      'The appearance of $x_{\\mathrm{in,var}}$ here is not an extra invented variable; it is the original symbolic-regression term rewritten into network notation. Biologically it suggests threshold-like recruitment or regime switching when heterogeneous upstream input accumulates.',
-      'The most reliable message is not each coefficient individually, but the existence of a gated heterogeneity-sensitive coupling: upstream disagreement matters, and its impact is amplified only in specific internal states of the target neuron.'
-    ],
-    variables: [
-      { name: 'x_i', description: 'Activity of neuron $i$ at the current time.' },
-      { name: 'A_{ij}', description: 'Effective incoming coupling weight written with indices $ij$, where $A_{ij}$ denotes a directed influence from neuron $j$ to neuron $i$.' },
-      { name: 'x_{\\mathrm{in,mean}}', description: 'Weighted mean incoming activity to neuron $i$.' },
-      { name: 'x_{\\mathrm{in,var}}', description: 'Weighted incoming activity variance to neuron $i$, measuring heterogeneity across presynaptic neurons.' },
-      { name: '\\Gamma_i', description: 'State-dependent gain factor that gates how strongly network input is converted into downstream change.' }
-    ]
-  },
-  'dbn_refine_200': {
-    ode_expr: 'f(x_i) + \\sum_j A_{ij}\\,g(x_i,x_j; x_{\\mathrm{in,mean}})',
-    aux_exprs: [
-      'x_{\\mathrm{in,mean}} = \\sum_j A_{ij}x_j',
-      '\\Lambda_i = \\left(-0.9254\\,x_i\\right)^{0.574\\,x_i}'
-    ],
-    f_expr: '\\Lambda_i\\,(0.1505\\,x_i + 0.1834) - 0.1893',
-    g_expr: '\\Lambda_i\\,1.1845\\,(x_j-x_{\\mathrm{in,mean}})^2',
-    reward: 0.707764, mse: 0.051734, complexity: 14,
-    interpretation: [
-      'Here the neuron carries its own gain controller $\\Lambda_i$, so self state determines how strongly incoming network heterogeneity is converted into output change.',
-      'That kind of term is biologically meaningful when excitability is state dependent: a neuron near one operating regime can be much more responsive to the same network input than the same neuron in another regime.',
-      'The dominant term is still the squared deviation $\\left(x_j-x_{\\mathrm{in,mean}}\\right)^2$, i.e. the network-notation version of the original $x_{\\mathrm{in,var}}$ contribution. This argues that structured differences across afferents, rather than average presynaptic level, are what most strongly shape downstream dynamics.'
-    ],
-    variables: [
-      { name: 'x_i', description: 'Activity of neuron $i$ at the current time.' },
-      { name: 'A_{ij}', description: 'Effective incoming coupling weight written with indices $ij$, where $A_{ij}$ denotes a directed influence from neuron $j$ to neuron $i$.' },
-      { name: 'x_{\\mathrm{in,mean}}', description: 'Weighted mean incoming activity to neuron $i$.' },
-      { name: '\\Lambda_i', description: 'Self-state-dependent gain factor that scales both intrinsic and coupling response.' }
-    ]
-  },
-  'dbn_refine_500': {
-    ode_expr: 'f(x_i) + \\sum_j A_{ij}\\,g(x_i,x_j; x_{\\mathrm{in,mean}})',
-    aux_exprs: [
-      'x_{\\mathrm{in,mean}} = \\sum_j A_{ij}x_j'
-    ],
-    f_expr: '-0.0574\\,x_i - 0.0063',
-    g_expr: '0.0939\\,x_j + 1.137\\,(x_j-x_{\\mathrm{in,mean}})^2',
-    reward: 0.806091, mse: 0.052052, complexity: 6,
-    interpretation: [
-      'This is the cleanest linear symbolic-regression result: intrinsic decay is strong, but network input contributes weak positive mean drive plus stronger heterogeneity-sensitive drive.',
-      'The positive linear $x_j$ term is biologically interesting because it says this inferred DBN network supports a modest excitatory pooling effect: coherent upstream activation can help elevate the target neuron.',
-      'Even so, the larger squared deviation term $\\left(x_j-x_{\\mathrm{in,mean}}\\right)^2$ shows that the original $x_{\\mathrm{in,var}}$ contribution remains dominant. The circuit is not just relaying average activity, but detecting structured spatial-temporal contrasts in its presynaptic population.'
-    ],
-    variables: [
-      { name: 'x_i', description: 'Activity of neuron $i$ at the current time.' },
-      { name: 'A_{ij}', description: 'Effective incoming coupling weight written with indices $ij$, where $A_{ij}$ denotes a directed influence from neuron $j$ to neuron $i$.' },
-      { name: 'x_{\\mathrm{in,mean}}', description: 'Weighted mean incoming activity to neuron $i$.' }
-    ]
-  }
-};
-
 async function loadNetworkSindyDB() {
   if (networkSindyDB) return networkSindyDB;
   const resp = await fetch('data/network_dynamics_sindy.json');
@@ -1224,13 +1101,12 @@ async function loadNetworkSindyDB() {
   return networkSindyDB;
 }
 
-function getDefaultVariablesForSymbolicRegression() {
-  return [
-    { name: 'x_i', description: 'Activity of neuron $i$ at the current time.' },
-    { name: 'A_{ij}', description: 'Effective incoming coupling weight written with indices $ij$, where $A_{ij}$ denotes a directed influence from neuron $j$ to neuron $i$.' },
-    { name: 'x_{\\mathrm{in,mean}}', description: 'Weighted mean incoming activity to neuron $i$.' },
-    { name: 'x_{\\mathrm{in,var}}', description: 'Weighted incoming activity variance to neuron $i$, measuring heterogeneity across presynaptic neurons.' }
-  ];
+async function loadSymbolicRegressionDB() {
+  if (symbolicRegressionDB) return symbolicRegressionDB;
+  const resp = await fetch('data/network_dynamics_symbolic_regression.json');
+  if (!resp.ok) throw new Error(`Failed to load network_dynamics_symbolic_regression.json: ${resp.status}`);
+  symbolicRegressionDB = await resp.json();
+  return symbolicRegressionDB;
 }
 
 function renderInlineMath(text) {
@@ -1262,10 +1138,10 @@ function buildDynamicsEquationLatex(data, method) {
   }
 
   const lines = [
-    `\\frac{dx_i}{dt} &= ${data.ode_expr}`,
+    data.expr.replace('=', '&='),
     ...data.aux_exprs.map((expr) => expr.replace('=', '&=')),
     `f(x_i) &= ${data.f_expr}`,
-    `g(x_i,x_j) &= ${data.g_expr}`
+    `G(x_i,x_j) &= ${data.g_expr}`
   ];
   return `\\begin{aligned}${lines.join('\\\\[6pt]')}\\end{aligned}`;
 }
@@ -1647,6 +1523,8 @@ async function runDynamicsInference() {
 
   if (dynMethod === 'network_sindy') {
     await loadNetworkSindyDB();
+  } else {
+    await loadSymbolicRegressionDB();
   }
 
   const sizeScale = dynSize === 200 ? 0.72 : 1.28;
@@ -1687,7 +1565,7 @@ async function runDynamicsInference() {
   const key = dynNetwork + '_' + dynSize;
   const data = dynMethod === 'network_sindy'
     ? networkSindyDB.results[key]
-    : symbolicRegressionDB[key];
+    : symbolicRegressionDB.results[key];
 
   // Render equation with KaTeX
   const eqEl = document.getElementById('dynEquation');
@@ -1704,7 +1582,7 @@ async function runDynamicsInference() {
   // Interpretation
   const interpEl = document.getElementById('dynInterpretation');
   interpEl.innerHTML = data.interpretation.map(t => `<p>• ${renderInlineMath(t)}</p>`).join('');
-  renderDynamicsVariables(dynMethod === 'network_sindy' ? data.variables : data.variables || getDefaultVariablesForSymbolicRegression());
+  renderDynamicsVariables(data.variables);
 
   document.getElementById('runDynamics').disabled = false;
 }
