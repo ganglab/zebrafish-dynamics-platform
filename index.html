@@ -549,7 +549,7 @@ body { overflow-x: hidden; }
 <footer class="border-t border-gray-800/50 mt-16">
   <div class="max-w-7xl mx-auto px-6 py-8 flex items-center justify-between text-xs text-gray-600">
     <span>BSFAS · Brain Structure–Function Analytics System</span>
-    <span class="font-mono">GCaMP8f · Soma · 2024–2025</span>
+    <span class="font-mono">GCaMP8f · Soma · 2026</span>
   </div>
 </footer>
 
@@ -658,18 +658,19 @@ function formatDuration(ms) {
 function estimateUploadDuration(fileSizeBytes) {
   const bits = fileSizeBytes * 8;
   const estimatedMs = (bits / (SIMULATED_UPLOAD_MEGABITS_PER_SECOND * 1_000_000)) * 1000;
-  return Math.max(MIN_SIMULATED_UPLOAD_MS, Math.min(MAX_SIMULATED_UPLOAD_MS, estimatedMs));
+  const randomized = estimatedMs * (0.9 + Math.random() * 0.22);
+  return Math.max(MIN_SIMULATED_UPLOAD_MS, Math.min(MAX_SIMULATED_UPLOAD_MS, randomized));
 }
 
 function resetUploadProgressUi() {
   document.getElementById('uploadProgressBar').style.width = '0%';
   document.getElementById('uploadProgressPercent').textContent = '0%';
-  document.getElementById('uploadProgressEta').textContent = 'estimating...';
+  document.getElementById('uploadProgressEta').textContent = '';
   document.getElementById('uploadBusyTitle').textContent = 'Uploading MATLAB dataset...';
   document.getElementById('uploadBusyDetail').textContent = 'Transferring file to the analysis workspace over a managed upload channel';
   document.getElementById('dynUploadProgressBar').style.width = '0%';
   document.getElementById('dynUploadProgressPercent').textContent = '0%';
-  document.getElementById('dynUploadProgressEta').textContent = 'estimating...';
+  document.getElementById('dynUploadProgressEta').textContent = '';
 }
 
 function setSharedUploadProgress(progress, etaText) {
@@ -694,7 +695,14 @@ function startUploadProgress(file) {
   resetUploadProgressUi();
   const durationMs = estimateUploadDuration(file.size);
   const start = performance.now();
-  uploadProgressState = { start, durationMs, file };
+  uploadProgressState = {
+    start,
+    durationMs,
+    file,
+    fastFactor: 0.9 + Math.random() * 0.18,
+    curve: 1.2 + Math.random() * 0.35,
+    jitterSeed: Math.random() * Math.PI * 2
+  };
 
   document.getElementById('uploadBusyTitle').textContent = `Uploading ${file.name}...`;
   document.getElementById('uploadBusyDetail').textContent = `Streaming ${formatBytes(file.size)} to the remote analysis workspace`;
@@ -703,10 +711,10 @@ function startUploadProgress(file) {
     if (!uploadProgressState) return;
     const elapsed = performance.now() - uploadProgressState.start;
     const ratio = Math.min(elapsed / uploadProgressState.durationMs, 1);
-    const eased = 1 - Math.pow(1 - ratio, 1.35);
-    const progress = Math.min(94, Math.round(eased * 94));
-    const remainingMs = Math.max(uploadProgressState.durationMs - elapsed, 0);
-    setSharedUploadProgress(progress, ratio < 0.985 ? formatDuration(remainingMs) : 'finalizing...');
+    const eased = 1 - Math.pow(1 - Math.min(ratio * uploadProgressState.fastFactor, 1), uploadProgressState.curve);
+    const jitter = Math.sin(ratio * 9 + uploadProgressState.jitterSeed) * 1.6 + Math.sin(ratio * 21 + uploadProgressState.jitterSeed * 0.7) * 0.7;
+    const progress = Math.min(94, Math.max(0, Math.round(eased * 94 + jitter)));
+    setSharedUploadProgress(progress, '');
   };
 
   tick();
@@ -715,14 +723,14 @@ function startUploadProgress(file) {
 }
 
 function setUploadProgressFinalizing() {
-  setSharedUploadProgress(96, 'finalizing...');
+  setSharedUploadProgress(96, '');
   document.getElementById('uploadBusyTitle').textContent = 'Upload complete, validating dataset...';
   document.getElementById('uploadBusyDetail').textContent = 'Checking MATLAB container signature, required datasets, and matrix dimensions';
 }
 
 function completeUploadProgress() {
   stopUploadProgressTimer();
-  setSharedUploadProgress(100, 'complete');
+  setSharedUploadProgress(100, '');
   document.getElementById('uploadBusyTitle').textContent = 'Upload completed';
   document.getElementById('uploadBusyDetail').textContent = 'Dataset compatibility check passed';
 }
@@ -929,7 +937,7 @@ async function handleMatFileSelection(file) {
       new Promise((resolve) => setTimeout(resolve, simulatedUploadMs))
     ]);
     setUploadProgressFinalizing();
-    await new Promise((resolve) => setTimeout(resolve, 1800));
+    await new Promise((resolve) => setTimeout(resolve, 1400 + Math.random() * 1200));
     applyUploadSummary(summary, file);
   } catch (error) {
     uploadedMatFile = null;
